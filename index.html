@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FARMIX · Where Farms Meet Market</title>
+    <link rel="icon" href="/img/full logo.png" />
+
+    <link rel="stylesheet" href="/styles/tokens.css" />
+    <link rel="stylesheet" href="/styles/base.css" />
+    <link rel="stylesheet" href="/styles/layout.css" />
+    <link rel="stylesheet" href="/styles/components.css" />
+    <link rel="stylesheet" href="/styles/pages/home.css" />
+    <script type="importmap">{"imports":{"@supabase/supabase-js":"https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"}}</script>
+  </head>
+  <body>
+    <div data-app-shell>
+
+      <!-- Ambient background orbs -->
+      <div class="ambient-orbs" aria-hidden="true">
+        <div class="orb orb-left"></div>
+        <div class="orb orb-right"></div>
+      </div>
+
+      <div data-mount="navbar"></div>
+
+      <main>
+        <div class="container hero">
+
+          <!-- Hero Card -->
+          <section class="card hero-card" aria-labelledby="hero-heading">
+            <div class="hero-inner">
+
+              <!-- Eyebrow badge -->
+              <div class="hero-eyebrow">
+                <span class="hero-eyebrow-dot" aria-hidden="true"></span>
+                Marketplace &middot; Direct-from-farm
+              </div>
+
+              <!-- Headline -->
+              <h1 id="hero-heading">
+                Where farms
+                <em>meet market.</em>
+              </h1>
+
+              <!-- Subtitle -->
+              <p class="hero-sub">
+                Buy fresh produce directly from farmers, or source in bulk for your
+                business — with transparent pricing and zero middlemen.
+              </p>
+
+              <!-- CTAs -->
+              <div class="hero-actions">
+                <a class="btn btn-primary" href="/pages/marketplace.html">Browse marketplace</a>
+                <a class="btn btn-ghost" href="/pages/signup.html">Create account</a>
+                <a
+                  class="btn btn-ghost"
+                  href="/pages/for-farmers.html"
+                  data-guest-gate
+                  data-guest-gate-title="Join the FARMIX community to start trading!"
+                >Sell as a farmer</a>
+              </div>
+
+              <!-- Stats -->
+              <div class="hero-stats" aria-label="Platform stats">
+                <div class="hero-stat">
+                  <span class="hero-stat-value">1,200+</span>
+                  <span class="hero-stat-label">Local Farms</span>
+                </div>
+                <div class="hero-stat">
+                  <span class="hero-stat-value">5,000+</span>
+                  <span class="hero-stat-label">Products Listed</span>
+                </div>
+                <div class="hero-stat">
+                  <span class="hero-stat-value">Zero</span>
+                  <span class="hero-stat-label">Middlemen</span>
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          <!-- Latest listings -->
+          <h2 class="section-title">Trending products</h2>
+          <div id="home-latest" class="featured-grid"></div>
+
+        </div>
+      </main>
+
+      <div data-mount="footer"></div>
+    </div>
+
+    <script type="module" src="/scripts/pages/home.page.js"></script>
+  </body>
+</html>

@@ -1,0 +1,319 @@
+/* ─── Auth page layout ───────────────────────────────────────────── */
+.auth-page {
+  min-height: calc(100vh - 4rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem 3rem;
+}
+
+/* ─── Glassmorphism modal card ───────────────────────────────────── */
+.auth-card {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  max-width: 468px;
+  background: var(--glass-bg-nav);
+  border: 1px solid var(--glass-border);
+  border-radius: 28px;
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  box-shadow: var(--glass-shadow-hover);
+  padding: 2.25rem 2rem 2rem;
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.auth-card.wide {
+  max-width: 560px;
+}
+
+/* Top accent line */
+.auth-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(39, 168, 116, 0.85) 40%, rgba(78, 201, 149, 0.65) 60%, transparent);
+}
+
+/* ─── Brand inside card ──────────────────────────────────────────── */
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1.85rem;
+  text-decoration: none;
+}
+
+.auth-brand img {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(10, 40, 28, 0.14);
+}
+
+.auth-brand-name {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-primary-900);
+  letter-spacing: -0.02em;
+}
+
+/* ─── Headings ───────────────────────────────────────────────────── */
+.auth-heading {
+  font-family: var(--font-serif);
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: var(--color-primary-900);
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  margin: 0 0 0.4rem;
+}
+
+.auth-subheading {
+  margin: 0 0 1.85rem;
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+/* ─── Form fields ────────────────────────────────────────────────── */
+.form-field {
+  display: grid;
+  gap: 0.32rem;
+  margin-bottom: 0.95rem;
+}
+
+.form-field:last-of-type {
+  margin-bottom: 0;
+}
+
+.form-label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: 0.005em;
+}
+
+.form-hint {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  margin-top: 0.1rem;
+}
+
+.form-error {
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+  min-height: 1em;
+}
+
+.form-error:empty {
+  display: none;
+}
+
+.form-error-banner {
+  font-size: var(--text-sm);
+  color: var(--color-danger);
+  background: rgba(180, 35, 24, 0.07);
+  border: 1px solid rgba(180, 35, 24, 0.18);
+  border-radius: 12px;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 1rem;
+  display: none;
+}
+
+.form-error-banner:not(:empty) {
+  display: block;
+}
+
+/* ─── Full-width button ──────────────────────────────────────────── */
+.btn-full {
+  width: 100%;
+  justify-content: center;
+  padding: 0.78rem 1.25rem;
+  font-size: var(--text-md);
+  border-radius: 14px;
+  margin-top: 0.25rem;
+}
+
+/* ─── Role picker ────────────────────────────────────────────────── */
+.role-section-label {
+  font-size: var(--text-sm);
+  font-weight: 760;
+  color: var(--color-text);
+  letter-spacing: 0.01em;
+  margin-bottom: 0.65rem;
+  display: block;
+}
+
+.role-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.role-card {
+  position: relative;
+  border: 2px solid var(--dash-border-soft);
+  border-radius: 18px;
+  padding: 1.25rem 1rem 1.1rem;
+  background: var(--glass-bg-card);
+  cursor: pointer;
+  transition:
+    border-color 180ms ease-out,
+    background 180ms ease-out,
+    transform 200ms ease-out,
+    box-shadow 200ms ease-out;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.42rem;
+  user-select: none;
+  /* reset button defaults */
+  font-family: inherit;
+  font-size: inherit;
+  outline: none;
+}
+
+.role-card:hover {
+  border-color: rgba(39, 168, 116, 0.38);
+  background: var(--glass-bg);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.role-card:focus-visible {
+  outline: 2px solid rgba(39, 168, 116, 0.5);
+  outline-offset: 2px;
+}
+
+.role-card.selected {
+  border-color: var(--color-primary-600);
+  background: rgba(39, 168, 116, 0.10);
+  box-shadow:
+    0 0 0 4px rgba(39, 168, 116, 0.14),
+    0 12px 28px rgba(10, 40, 28, 0.10);
+  transform: translateY(-2px);
+}
+
+/* Check badge */
+.role-card-check {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--color-primary-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 180ms ease-out, transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.role-card.selected .role-card-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.role-card-icon {
+  font-size: 2.1rem;
+  line-height: 1;
+}
+
+.role-card-title {
+  font-size: var(--text-md);
+  font-weight: 800;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+.role-card-desc {
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  line-height: 1.45;
+}
+
+/* ─── Conditional fields ─────────────────────────────────────────── */
+.conditional-field {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition:
+    max-height 280ms ease-out,
+    opacity 240ms ease-out,
+    margin-bottom 280ms ease-out;
+  margin-bottom: 0;
+}
+
+.conditional-field.visible {
+  max-height: 110px;
+  opacity: 1;
+  margin-bottom: 0.95rem;
+}
+
+/* ─── Divider ────────────────────────────────────────────────────── */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin: 1.35rem 0;
+  color: var(--color-subtle);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+/* ─── Footer link ────────────────────────────────────────────────── */
+.auth-footer {
+  margin-top: 1.35rem;
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
+.auth-footer a {
+  color: var(--color-primary-600);
+  font-weight: 700;
+  margin-left: 0.3rem;
+  transition: color 150ms ease-out;
+}
+
+.auth-footer a:hover {
+  color: var(--color-primary-800);
+}
+
+/* ─── Google button container ────────────────────────────────────── */
+.google-btn-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 1.75rem 1.25rem 1.5rem;
+  }
+
+  .role-grid {
+    grid-template-columns: 1fr;
+  }
+}

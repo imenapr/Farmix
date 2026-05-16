@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>For Farmers · FARMIX</title>
+    <link rel="icon" href="/img/logo.png" />
+
+    <link rel="stylesheet" href="/styles/tokens.css" />
+    <link rel="stylesheet" href="/styles/base.css" />
+    <link rel="stylesheet" href="/styles/layout.css" />
+    <link rel="stylesheet" href="/styles/components.css" />
+    <link rel="stylesheet" href="/styles/pages/shared.css" />
+    <script type="importmap">{"imports":{"@supabase/supabase-js":"https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"}}</script>
+  </head>
+  <body>
+    <div data-app-shell>
+      <div data-mount="navbar"></div>
+
+      <main>
+        <div class="container">
+          <header class="page-head">
+            <h1 class="page-title">For Farmers</h1>
+            <p class="page-subtitle">List your products, get inquiries, and sell directly — no middlemen.</p>
+          </header>
+
+          <section class="card pad stack">
+            <div class="pill">Direct selling</div>
+            <div class="pill">Bulk-friendly listings</div>
+            <div class="pill">Inquiries inbox</div>
+            <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.4rem;">
+              <a class="btn btn-primary" href="/pages/signup.html">Sign up as a farmer</a>
+              <a class="btn btn-ghost" href="/pages/marketplace.html">View marketplace</a>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <div data-mount="footer"></div>
+    </div>
+
+    <script type="module" src="/scripts/pages/marketing.page.js"></script>
+  </body>
+</html>
+
