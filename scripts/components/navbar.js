@@ -159,7 +159,6 @@ function renderNav({ user } = {}) {
               <span class="nav-avatar" aria-hidden="true">${userInitials}</span>
               ${esc(user.name)}
             </span>
-            <a class="btn btn-primary" href="/pages/dashboard.html">Dashboard</a>
             <button class="btn btn-ghost" type="button" data-action="logout">Log out</button>
           ` : `
             <a class="btn btn-ghost" href="/pages/login.html">Log in</a>
@@ -171,6 +170,7 @@ function renderNav({ user } = {}) {
     </header>
   `;
 }
+
 
 // ─── Mount ────────────────────────────────────────────────────────────────────
 export function mountNavbar(targetEl) {
