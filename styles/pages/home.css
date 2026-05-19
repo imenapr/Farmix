@@ -82,7 +82,7 @@
   position: relative;
   z-index: 1;
   max-width: 700px;
-  display: grid;
+  display: inline-block;
   gap: 0;
 }
 
@@ -278,4 +278,8 @@
     padding-right: 1.5rem;
     margin-right: 1.5rem;
   }
+}
+
+.meeting {
+    display: inline-block;
 }

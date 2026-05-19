@@ -5,6 +5,7 @@ import { LISTING_STATUS } from "../app/config.js";
 import { renderListingCard } from "../components/listing-card.js";
 import { getCurrentUser } from "../services/auth.service.js";
 
+
 boot();
 
 const mount = document.getElementById("home-latest");
@@ -66,4 +67,3 @@ if (mount) {
     `;
   }, 650);
 }
-
