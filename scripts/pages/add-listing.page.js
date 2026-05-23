@@ -1,8 +1,8 @@
 import { boot } from "../app/boot.js";
 import { qs, setText, toast } from "../app/ui.js";
 import { getCurrentUser } from "../services/auth.service.js";
-import { withDb } from "../data/db.js";
 import { LISTING_STATUS } from "../app/config.js";
+import { getDb } from "../services/db.provider.js";
 
 boot();
 
@@ -113,7 +113,7 @@ if (root) {
       if (listingRes?.ok && listingRes.listing) {
         const serverListing = listingRes.listing;
         console.log("[Sync to Frontend]", serverListing);
-        withDb((db) => {
+        getDb((db) => {
           const newListing = {
             id: serverListing.id,
             title: serverListing.title,
