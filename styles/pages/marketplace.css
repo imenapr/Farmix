@@ -4,8 +4,8 @@
 }
 
 .filters {
-  position: sticky;
-  top: 76px;
+  position: static;
+  top: 0%;
   align-self: start;
 }
 

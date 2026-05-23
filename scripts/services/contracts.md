@@ -61,25 +61,6 @@ type Listing = {
 };
 ```
 
-### Message shape (`Message`)
-
-```ts
-type MessageStatus = "new" | "read" | "archived";
-
-type Message = {
-  id: string;
-  listingId: string;
-  fromUserId: string;
-  toUserId: string;
-  name: string;
-  email: string;
-  phone?: string;
-  body: string;
-  status: MessageStatus;
-  createdAt: number;
-};
-```
-
 ### Marketplace filters (`MarketplaceFilters`)
 
 URL query params are the source of truth on the marketplace page.
@@ -97,8 +78,6 @@ type MarketplaceFilters = {
   page: number;
 };
 ```
-
----
 
 ## `auth.service.js`
 

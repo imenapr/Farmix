@@ -246,10 +246,8 @@
 
 /* ─── Navbar ─────────────────────────────────────────────────────── */
 .nav {
-  position: sticky;
-  top: 0.75rem;
+  position: relative;
   z-index: 40;
-  margin: 0.5rem 1rem 0;
 }
 
 .nav-inner {
@@ -380,6 +378,7 @@
 .theme-toggle:hover {
   background: var(--dash-surface-2);
   transform: translateY(-1px);
+  opacity: 0.8;
 }
 
 .theme-toggle svg {
@@ -389,9 +388,9 @@
 }
 
 .nav-user {
-  display: none;
+  display: dlex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.6rem;
   padding: 0.32rem 0.7rem 0.32rem 0.32rem;
   border-radius: 999px;
   border: 1px solid var(--glass-border);
@@ -400,7 +399,13 @@
   font-size: var(--text-sm);
   font-weight: 600;
   white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
 }
+
+.nav-user:hover{
+    opacity: 0.8;
+  }
 
 .nav-avatar {
   display: inline-flex;
@@ -421,6 +426,7 @@
   .nav-links { display: flex; }
   .nav-user { display: inline-flex; }
 }
+
 
 /* ─── Footer ─────────────────────────────────────────────────────── */
 .footer {

@@ -82,7 +82,7 @@ function setLoading(on) {
 
 function redirectAfterLogin() {
   const next = new URLSearchParams(location.search).get("next");
-  location.href = next || "/pages/dashboard.html";
+  location.href = next || "/index.html";
 }
 
 const next = new URLSearchParams(location.search).get("next");

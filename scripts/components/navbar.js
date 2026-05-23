@@ -96,7 +96,7 @@ function renderNav({ user } = {}) {
   const badgeLabel   = roleBadgeLabel(role);
   const userInitials = isAuthed ? initials(user.name) : "";
 
-  const bellHtml = isAuthed ? `
+  const bellHtml = isAuthed && user.role === "admin" ? `
     <div class="notif-bell-wrap" id="notif-bell-wrap">
       <button
         class="notif-bell-btn"
@@ -155,10 +155,13 @@ function renderNav({ user } = {}) {
           </button>
           ${bellHtml}
           ${isAuthed ? `
-            <span class="nav-user" aria-label="Signed in as ${esc(user.name)}">
-              <span class="nav-avatar" aria-hidden="true">${userInitials}</span>
-              ${esc(user.name)}
-            </span>
+            <a class="nav-user" href="../../pages/account.html" aria-label="Open account page">
+                <span class="nav-avatar" aria-hidden="true">
+                ${userInitials}
+                </span>
+
+                 ${esc(user.name)}
+            </a>
             <button class="btn btn-ghost" type="button" data-action="logout">Log out</button>
           ` : `
             <a class="btn btn-ghost" href="/pages/login.html">Log in</a>

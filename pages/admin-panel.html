@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Admin panel</title>
+        <link rel="icon" href="/img/logo.png" />
+    
+        <link rel="stylesheet" href="/styles/tokens.css" />
+        <link rel="stylesheet" href="/styles/base.css" />
+        <link rel="stylesheet" href="/styles/layout.css" />
+        <link rel="stylesheet" href="/styles/components.css" />
+        <link rel="stylesheet" href="/styles/pages/shared.css" />
+        <script type="importmap">{"imports":{"@supabase/supabase-js":"https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm"}}</script>
+    </head>
+    <body>
+        <div class="adm-shell" id="adm-shell">
+            <div data-mount="navbar"></div>
+
+        <!-- Sidebar -->
+        <aside class="adm-sidebar" id="adm-sidebar">
+            <div class="adm-sidebar-head">
+            <img src="/img/full_logo.png" alt="FARMIX" />
+            <span class="adm-sidebar-title">FARMIX</span>
+            <span class="adm-sidebar-badge">Admin</span>
+            </div>
+
+            <nav class="adm-nav" id="adm-nav">
+            <div class="adm-nav-label">Management</div>
+
+            <button class="adm-nav-item active" data-section="overview" type="button">
+                <span class="adm-nav-icon">◈</span> Overview
+            </button>
+
+            <button class="adm-nav-item" data-section="users" type="button">
+                <span class="adm-nav-icon">👥</span> Users
+            </button>
+
+            <button class="adm-nav-item" data-section="listings" type="button">
+                <span class="adm-nav-icon">📦</span> Listings
+            </button>
+
+            <button class="adm-nav-item" data-section="analytics" type="button">
+                <span class="adm-nav-icon">📈</span> Analytics
+            </button>
+            </nav>
+
+            <div class="adm-sidebar-footer">
+            <div class="adm-sidebar-user" id="adm-user-name">—</div>
+            <button class="adm-btn-logout" id="adm-logout-btn" type="button">
+                Sign out
+            </button>
+            </div>
+        </aside>
+
+        <!-- Main -->
+        <div class="adm-main">
+
+            <!-- Topbar -->
+            <div class="adm-topbar">
+            <div>
+                <div class="adm-topbar-title" id="adm-page-title">Overview</div>
+                <div class="adm-topbar-sub" id="adm-page-sub">
+                System status and summary
+                </div>
+            </div>
+
+            <button
+                class="adm-theme-toggle"
+                id="adm-theme-toggle"
+                type="button"
+                aria-label="Toggle dark mode"
+                title="Switch theme"
+            >
+                ☀
+            </button>
+            </div>
+
+            <!-- Content -->
+            <div class="adm-content">
+
+            <!-- Overview -->
+            <section class="adm-section active" id="section-overview">
+                <div class="adm-stats-grid" id="adm-stats-grid"></div>
+
+                <div class="adm-section-head">
+                <h2 class="adm-section-title">Quick glance</h2>
+                </div>
+
+                <div id="adm-overview-detail"></div>
+            </section>
+
+            <!-- Users -->
+            <section class="adm-section" id="section-users">
+                <div class="adm-section-head">
+                <h2 class="adm-section-title">User Management</h2>
+                <span class="adm-section-count" id="users-count">—</span>
+                <span class="adm-section-spacer"></span>
+
+                <button class="adm-btn adm-btn-ghost" id="refresh-users-btn" type="button">
+                    ↻ Refresh
+                </button>
+                </div>
+
+                <div id="adm-users-mount">
+                <div class="adm-empty">Loading users…</div>
+                </div>
+            </section>
+
+            <!-- Listings -->
+            <section class="adm-section" id="section-listings">
+                <div class="adm-section-head">
+                <h2 class="adm-section-title">Marketplace Moderation</h2>
+                <span class="adm-section-count" id="listings-count">—</span>
+                <span class="adm-section-spacer"></span>
+
+                <button class="adm-btn adm-btn-ghost" id="refresh-listings-btn" type="button">
+                    ↻ Refresh
+                </button>
+                </div>
+
+                <div id="adm-listings-mount">
+                <div class="adm-empty">Loading listings…</div>
+                </div>
+            </section>
+
+            </div>
+        </div>
+        </div>
+
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+        <script type="module" src="/scripts/pages/admin-panel.page.js"></script>
+    </body>
+</html>

@@ -53,8 +53,8 @@ function migrate(db) {
 function ensureDefaultAdmins(db) {
   const required = [
     {
-      email: "algaganashvili@gmail.com",
-      password: "Hilberti123",
+      email: "imenapro14@gmail.com",
+      password: "Nikoloz556!",
       name: "Gagan Ashvili",
       location: "Tbilisi",
     },
