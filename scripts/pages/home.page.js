@@ -43,20 +43,7 @@ if (mount) {
 
     const farmersStrip = topFarmers.length
       ? `
-      <section class="home-trust-strip card">
-        <div class="home-trust-head">
-          <h3>Top Verified Farmers</h3>
-          <p>Trusted suppliers with consistent activity on FARMIX.</p>
-        </div>
-        <div class="home-farmer-chips">
-          ${topFarmers.map((farmer) => `
-            <span class="home-farmer-chip">
-              <span class="home-farmer-dot"></span>
-              ${farmer.name}
-            </span>
-          `).join("")}
-        </div>
-      </section>`
+      `
       : "";
 
     mount.innerHTML = `

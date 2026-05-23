@@ -82,9 +82,36 @@
   position: relative;
   z-index: 1;
   max-width: 700px;
-  display: inline-block;
-  gap: 0;
+  display: block;
 }
+
+.hero-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2rem;
+}
+
+.hero-visual {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  max-width: 700px;
+}
+
+.meeting {
+  width: 100%;
+  max-width: 700px;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
+@media (max-width: 1280px){
+    .meeting{
+      display: none;
+    }
+  }
 
 /* Eyebrow badge */
 .hero-eyebrow {
@@ -265,6 +292,12 @@
 }
 
 /* ─── Responsive ─────────────────────────────────────────────────── */
+@media (max-width: 960px) {
+  .hero-card {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .hero-card {
     padding: 1.75rem 1.25rem 1.5rem;
@@ -278,8 +311,4 @@
     padding-right: 1.5rem;
     margin-right: 1.5rem;
   }
-}
-
-.meeting {
-    display: inline-block;
 }
