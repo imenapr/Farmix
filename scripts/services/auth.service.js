@@ -46,7 +46,7 @@ export function getCurrentUser() {
 // Synchronous bridge: reads the Supabase session directly from localStorage
 // (at the known key) so router-guards can call getCurrentUser() immediately.
 export function initAuthSession() {
-  const db = loadDb();
+  const db = getDb();
 
   // 1. Try reading the live Supabase session synchronously from localStorage
   try {
@@ -98,30 +98,49 @@ export async function signup(input) {
     return { ok: false, error: { code: "VALIDATION_FAILED", message: "Select a valid role." } };
   }
 
-  // Check for existing email before touching Supabase
-  const dbCheck = loadDb();
-  if (dbCheck.users.some((u) => u.email === email)) {
-    return { ok: false, error: { code: "CONFLICT", message: "An account with this email already exists." } };
-  }
-
-  // Register in Supabase (best-effort; failure still allows local signup)
+  // Register in Supabase Auth
   const supaSignup = await supabase.auth.signUp({
     email,
     password,
     options: { data: { name, role } },
   });
-  if (supaSignup.error && supaSignup.error.message?.toLowerCase().includes("already registered")) {
-    return { ok: false, error: { code: "CONFLICT", message: "An account with this email already exists." } };
+
+  if (supaSignup.error) {
+    if (supaSignup.error.message?.toLowerCase().includes("already registered")) {
+      return { ok: false, error: { code: "CONFLICT", message: "An account with this email already exists." } };
+    }
+    return { ok: false, error: { code: "AUTH_ERROR", message: supaSignup.error.message } };
   }
 
+  const supabaseUserId = supaSignup.data?.user?.id;
+  if (!supabaseUserId) {
+    return { ok: false, error: { code: "AUTH_ERROR", message: "Failed to create Supabase user." } };
+  }
+
+  // Create user profile in Supabase users table (requires INSERT policy on users table)
+  const userProfileData = {
+    id: supabaseUserId,
+    email,
+    role,
+    name,
+    location,
+    farm_name: farmName || null,
+    company_name: companyName || null,
+    created_at: now(),
+    updated_at: now(),
+  };
+
+  await supabase
+    .from("users")
+    .insert([userProfileData])
+    .catch(() => {}); // Silently fail if RLS blocks it (policy not yet added)
+
+  // Sync to local db (using Supabase UUID as ID for consistency)
   const created = { userPublic: null };
-
   withDb((db) => {
-    if (db.users.some((u) => u.email === email)) return db; // race guard
-
     const t = now();
     const user = {
-      id: `usr_${crypto.randomUUID?.() ?? `${t}_${Math.random().toString(16).slice(2)}`}`,
+      id: supabaseUserId,
       email,
       passwordHash: hashPasswordMock(password),
       role,
@@ -139,13 +158,9 @@ export async function signup(input) {
     return db;
   });
 
-  if (!created.userPublic) {
-    return { ok: false, error: { code: "CONFLICT", message: "An account with this email already exists." } };
-  }
-
   // Notify admins on new farmer registration
   if (role === ROLES.farmer) {
-    const currentDb = loadDb();
+    const currentDb = getDb();
     currentDb.users
       .filter((u) => u.role === ROLES.admin)
       .forEach((admin) => {
@@ -153,12 +168,12 @@ export async function signup(input) {
           userId  : admin.id,
           type    : "new_farmer_registered",
           message : `New farmer registered: ${name} (${email})`,
-          metadata: { farmerId: created.userPublic.id, farmerName: name, farmerEmail: email },
+          metadata: { farmerId: supabaseUserId, farmerName: name, farmerEmail: email },
         });
       });
   }
 
-  setSession({ userId: created.userPublic.id, token: `t_${now()}`, createdAt: now() });
+  setSession({ userId: supabaseUserId, token: `t_${now()}`, createdAt: now() });
   setCurrentUserInternal(created.userPublic);
   return { ok: true, data: { user: created.userPublic } };
 }
@@ -179,7 +194,7 @@ export async function login(input) {
   try {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (!error && data?.user) {
-      const db   = loadDb();
+      const db   = getDb();
       const user = db.users.find((u) => u.email === email) ?? null;
       if (user) {
         if (user.suspended) {
@@ -208,7 +223,7 @@ export async function login(input) {
   } catch { /* fall through to localStorage */ }
 
   // 2. Fallback: localStorage auth (handles seed/demo users)
-  const db   = loadDb();
+  const db   = getDb();
   const user = db.users.find((u) => u.email === email);
   if (!user)                                         return { ok: false, error: { code: "AUTH_FAILED", message: "Invalid email or password." } };
   if (user.passwordHash !== hashPasswordMock(password)) return { ok: false, error: { code: "AUTH_FAILED", message: "Invalid email or password." } };
@@ -271,7 +286,7 @@ export function watchSession() {
     if (e.key !== STORAGE_KEYS.db) return;
     const session = getSession();
     if (!session?.userId) return;
-    const db   = loadDb();
+    const db   = getDb();
     const user = db.users.find((u) => u.id === session.userId) ?? null;
     if (!user || user.suspended) {
       setSession(null);

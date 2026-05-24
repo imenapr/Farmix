@@ -1,15 +1,22 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-export const SUPABASE_URL      = "https://fpgvgetxtifenmqchdlw.supabase.co";
-export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZwZ3ZnZXR4dGlmZW5tcWNoZGx3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3MzQxMTEsImV4cCI6MjA5MTMxMDExMX0.KwtiIGYfAlk3Jp1BG4SaHrUd6FXRM-RZfdt55tvLkbY";
+export const SUPABASE_URL =
+  "https://kxdgnygvwnaxfcsljujt.supabase.co";
 
-// Supabase stores its session at this localStorage key — read synchronously in initAuthSession()
-export const SUPABASE_SESSION_KEY = "farmix.supabase.session";
+export const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4ZGdueWd2d25heGZjc2xqdWp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMjI4NzAsImV4cCI6MjA5NDU5ODg3MH0.rEoHZAZXcUdadKSD7b7gJuWcl90d72z6KqneK4yLQLQ";
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession    : true,
-    autoRefreshToken  : true,
-    storageKey        : SUPABASE_SESSION_KEY,
-  },
-});
+export const SUPABASE_SESSION_KEY =
+  "farmix.supabase.session";
+
+export const supabase = createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      storageKey: SUPABASE_SESSION_KEY,
+    },
+  }
+);

@@ -199,5 +199,5 @@ form.addEventListener("submit", async (e) => {
   }
 
   toast("success", `Welcome to FARMIX, ${res.data.user.name}!`);
-  location.href = next || "/pages/dashboard.html";
+  location.href = next || "/index.html";
 });

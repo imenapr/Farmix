@@ -1,10 +1,8 @@
-﻿import { boot } from "../app/boot.js";
+import { boot } from "../app/boot.js";
 import { getCurrentUser, initAuthSession } from "../services/auth.service.js";
 import { escapeHtml, renderStateBlock, toast, qs, setText } from "../app/ui.js";
-import { getListingById, incrementListingView } from "../services/listings.service.js";
-import { getUserById } from "../services/users.service.js";
+import { getListingById, incrementListingView, archiveListingAsOwnerOrAdmin } from "../services/listings.service.js";
 import { createInquiry } from "../services/messages.service.js";
-import { isFavorited, toggleFavorite } from "../services/favorites.service.js";
 
 boot();
 
@@ -19,7 +17,9 @@ function ratingText(value) {
 }
 
 const root = document.getElementById("product-root");
-if (root) {
+if (!root) throw new Error("Missing #product-root");
+
+async function initPage() {
   const id = new URLSearchParams(location.search).get("id");
   if (!id) {
     root.innerHTML = renderStateBlock({
@@ -30,7 +30,7 @@ if (root) {
     return;
   }
 
-  const res = getListingById(id);
+  const res = await getListingById(id);
   if (!res.ok) {
     root.innerHTML = renderStateBlock({
       title: "Listing not found",
@@ -43,12 +43,10 @@ if (root) {
   const listing = res.data;
   incrementListingView(listing.id);
 
-  const sellerRes = getUserById(listing.sellerId);
-  const seller = sellerRes.ok ? sellerRes.data : null;
-
   const user = getCurrentUser();
-  const canSave = user && (user.role === "business" || user.role === "admin");
-  const saved = canSave ? isFavorited(user.id, listing.id) : false;
+  const isOwner = user && user.id === listing.seller_id;
+  const isAdmin = user && user.role === "admin";
+  const canManage = isOwner || isAdmin;
 
   const price = Number(listing.price).toFixed(2).replace(/\.00$/, "");
   const images = Array.isArray(listing.images) && listing.images.length ? listing.images : ["/img/logo.png"];
@@ -84,9 +82,10 @@ if (root) {
           <div class="product-price">${escapeHtml(price)} / ${escapeHtml(listing.unit)}</div>
 
           <div class="listing-meta" style="margin-top:0.6rem;">
-            <span class="pill">${escapeHtml(listing.categoryId)}</span>
-            <span class="pill">${escapeHtml(listing.location)}</span>
-            <span class="pill">${escapeHtml(String(listing.quantityAvailable))} available</span>
+            <span class="pill">${escapeHtml(listing.category_id)}</span>
+            <span class="pill">${escapeHtml(listing.location || "")}</span>
+            <span class="pill">${escapeHtml(String(listing.quantity_available))} available</span>
+            <span class="pill" style="color: #666;">${listing.status === "active" ? "Available" : listing.status === "sold" ? "Sold" : "Archived"}</span>
           </div>
 
           <div class="rating-grid" style="margin-top:0.8rem;">
@@ -96,35 +95,51 @@ if (root) {
           </div>
 
           <div class="desc-wrap">
-            <p class="product-desc is-collapsed" data-desc>${escapeHtml(listing.description)}</p>
+            <p class="product-desc is-collapsed" data-desc>${escapeHtml(listing.description || "")}</p>
             <button class="btn btn-ghost" type="button" data-desc-toggle>Read more</button>
           </div>
+
+          ${
+            canManage
+              ? `
+            <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1rem;">
+              <a class="btn btn-ghost" href="/pages/edit-listing.html?id=${id}">Edit</a>
+              <button class="btn btn-ghost" type="button" data-delete style="color: #d32f2f;">Delete</button>
+            </div>
+          `
+              : ""
+          }
         </div>
       </section>
 
       <aside class="stack">
         <section class="card pad seller-box">
           <div class="pill">Seller</div>
-          <div style="font-weight:850; letter-spacing:-0.01em;">${escapeHtml(seller?.name ?? "Unknown")}</div>
-          <div class="muted" style="font-size:var(--text-sm);">${escapeHtml(seller?.location ?? listing.location)}</div>
+          <div style="font-weight:850; letter-spacing:-0.01em;">${escapeHtml(listing.seller_name || "Unknown Seller")}</div>
+          <div class="muted" style="font-size:var(--text-sm);">${escapeHtml(listing.seller_location || listing.location || "")}</div>
           <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.35rem;">
-            ${seller ? `<a class="btn btn-ghost" href="/pages/profile.html?id=${encodeURIComponent(seller.id)}">View profile</a>` : ""}
-            ${canSave ? `<button class="btn btn-primary" type="button" data-save>${saved ? "Saved" : "Save"}</button>` : ""}
+            ${
+              !user
+                ? `<div class="muted" style="font-size:var(--text-sm); margin-top:0.25rem;">Login to send inquiries and view seller profile.</div>`
+                : ""
+            }
           </div>
-          ${!user ? `<div class="muted" style="font-size:var(--text-sm); margin-top:0.25rem;">Login to contact and save listings.</div>` : ""}
         </section>
 
+        ${
+          user && !isOwner
+            ? `
         <section class="card pad">
           <h2 style="margin:0 0 0.6rem; letter-spacing:-0.01em;">Send inquiry</h2>
           <form id="inquiry-form" class="stack" novalidate>
             <label class="stack" style="gap:0.35rem;">
               <span style="font-weight:800;">Name</span>
-              <input class="input" name="name" required />
+              <input class="input" name="name" value="${escapeHtml(user.name || "")}" required />
               <span class="error-text" data-err="name"></span>
             </label>
             <label class="stack" style="gap:0.35rem;">
               <span style="font-weight:800;">Email</span>
-              <input class="input" name="email" type="email" required />
+              <input class="input" name="email" type="email" value="${escapeHtml(user.email || "")}" required />
               <span class="error-text" data-err="email"></span>
             </label>
             <label class="stack" style="gap:0.35rem;">
@@ -134,24 +149,21 @@ if (root) {
             </label>
             <label class="stack" style="gap:0.35rem;">
               <span style="font-weight:800;">Message</span>
-              <textarea class="textarea" name="body" rows="5" required placeholder="What quantity do you need? Pickup or delivery?"></textarea>
+              <textarea class="input" name="body" rows="5" required placeholder="What quantity do you need? Pickup or delivery?"></textarea>
               <span class="error-text" data-err="body"></span>
             </label>
             <p class="error-text" data-err="form" style="margin:0;"></p>
-            <div style="display:flex; gap:0.6rem; flex-wrap:wrap; align-items:center;">
-              <button class="btn btn-primary" type="submit" data-submit>Send inquiry</button>
-              <a class="btn btn-ghost" href="/pages/marketplace.html">Back</a>
-            </div>
+            <button class="btn btn-primary" type="submit" data-submit>Send inquiry</button>
           </form>
         </section>
+      `
+            : ""
+        }
       </aside>
     </div>
   `;
 
-  const form = qs(root, "#inquiry-form");
-  const submitBtn = qs(form, "[data-submit]");
-  const err = (k) => qs(form, `[data-err='${k}']`);
-
+  // Image gallery
   const mainImage = qs(root, "[data-main-image]");
   const thumbButtons = root.querySelectorAll("[data-thumb]");
   thumbButtons.forEach((btn) => {
@@ -164,6 +176,7 @@ if (root) {
     });
   });
 
+  // Description expand/collapse
   const desc = qs(root, "[data-desc]");
   const descToggle = qs(root, "[data-desc-toggle]");
   if (String(listing.description ?? "").length <= 180) {
@@ -181,72 +194,79 @@ if (root) {
     }
   });
 
-  function clearErrors() {
-    for (const k of ["name", "email", "phone", "body", "form"]) setText(err(k), "");
-  }
-
-  function setLoading(isLoading) {
-    submitBtn.disabled = isLoading;
-    submitBtn.textContent = isLoading ? "Sending..." : "Send inquiry";
-  }
-
-  initAuthSession();
-  const u = getCurrentUser();
-  if (u) {
-    form.elements.namedItem("name").value = u.name ?? "";
-    form.elements.namedItem("email").value = u.email ?? "";
-  }
-
-  const saveBtn = root.querySelector("[data-save]");
-  if (saveBtn && u) {
-    saveBtn.addEventListener("click", () => {
-      const r = toggleFavorite(u.id, listing.id);
-      if (!r.ok) {
-        toast("error", r.error?.message ?? "Failed to update saved items.");
+  // Delete button
+  const deleteBtn = root.querySelector("[data-delete]");
+  if (deleteBtn && canManage) {
+    deleteBtn.addEventListener("click", async () => {
+      if (!confirm("Are you sure you want to delete this listing? This action cannot be undone.")) {
         return;
       }
-      saveBtn.textContent = r.data.favorited ? "Saved" : "Save";
-      toast("success", r.data.favorited ? "Saved listing." : "Removed from saved.");
+
+      deleteBtn.disabled = true;
+      deleteBtn.textContent = "Deleting...";
+
+      const res = await archiveListingAsOwnerOrAdmin(id, user.id, user.role);
+      if (!res.ok) {
+        deleteBtn.disabled = false;
+        deleteBtn.textContent = "Delete";
+        toast("error", res.error || "Failed to delete listing");
+        return;
+      }
+
+      toast("success", "Listing deleted successfully");
+      setTimeout(() => {
+        window.location.href = "/pages/marketplace.html";
+      }, 1000);
     });
   }
 
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    clearErrors();
+  // Inquiry form
+  const form = root.querySelector("#inquiry-form");
+  if (form) {
+    const submitBtn = qs(form, "[data-submit]");
+    const err = (k) => qs(form, `[data-err='${k}']`);
 
-    const authed = getCurrentUser();
-    if (!authed) {
-      toast("error", "Please log in to send inquiries.");
-      location.href = `/pages/login.html?next=${encodeURIComponent(location.pathname + location.search)}`;
-      return;
+    function clearErrors() {
+      for (const k of ["name", "email", "phone", "body", "form"]) setText(err(k), "");
     }
 
-    setLoading(true);
-    const fd = new FormData(form);
-    const r = createInquiry(authed.id, listing.id, {
-      name: fd.get("name"),
-      email: fd.get("email"),
-      phone: fd.get("phone"),
-      body: fd.get("body"),
-    });
+    function setLoading(isLoading) {
+      submitBtn.disabled = isLoading;
+      submitBtn.textContent = isLoading ? "Sending..." : "Send inquiry";
+    }
 
-    if (!r.ok) {
-      setLoading(false);
-      const fe = r.error.fieldErrors ?? {};
-      for (const [k, msg] of Object.entries(fe)) {
-        const el = form.querySelector(`[data-err='${k}']`);
-        if (el) el.textContent = msg;
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      clearErrors();
+      setLoading(true);
+
+      const fd = new FormData(form);
+      const r = createInquiry(user.id, listing.id, {
+        name: fd.get("name"),
+        email: fd.get("email"),
+        phone: fd.get("phone"),
+        body: fd.get("body"),
+      });
+
+      if (!r.ok) {
+        setLoading(false);
+        const fe = r.error.fieldErrors ?? {};
+        for (const [k, msg] of Object.entries(fe)) {
+          const el = form.querySelector(`[data-err='${k}']`);
+          if (el) el.textContent = msg;
+        }
+        setText(err("form"), r.error.message ?? "Failed to send inquiry.");
+        return;
       }
-      setText(err("form"), r.error.message ?? "Failed to send inquiry.");
-      return;
-    }
 
-    setLoading(false);
-    toast("success", "Inquiry sent.");
-    form.reset();
-    if (authed) {
-      form.elements.namedItem("name").value = authed.name ?? "";
-      form.elements.namedItem("email").value = authed.email ?? "";
-    }
-  });
+      setLoading(false);
+      toast("success", "Inquiry sent successfully!");
+      form.reset();
+      form.elements.namedItem("name").value = user.name ?? "";
+      form.elements.namedItem("email").value = user.email ?? "";
+    });
+  }
 }
+
+initAuthSession();
+initPage();

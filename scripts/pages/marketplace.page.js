@@ -293,6 +293,87 @@ if (root) {
     pagerEl.appendChild(next);
   }
 
+  // ── Render function (now async) ───────────────────────────────────────
+  async function render() {
+    const parsed = readFiltersFromUrl();
+    if (!parsed.ok) {
+      resultsEl.innerHTML = renderStateBlock({
+        title: "Invalid filters",
+        description: "Some filter values in the URL are invalid. Reset filters to continue.",
+        actionsHtml: `<button class="btn btn-primary" type="button" id="fix-filters">Reset filters</button>`,
+      });
+      const btn = resultsEl.querySelector("#fix-filters");
+      if (btn) {
+        btn.addEventListener("click", () => {
+          history.replaceState(null, "", "/pages/marketplace.html");
+          render();
+        });
+      }
+      return;
+    }
+
+    const f = parsed.filters;
+    syncForm(f);
+
+    countEl.textContent = "Loading listings…";
+    pageEl.textContent = "";
+    pagerEl.innerHTML = "";
+    resultsEl.innerHTML = renderSkeletonCards(9);
+
+    try {
+      const res = await searchListings(new URLSearchParams(location.search));
+      if (!res.ok) {
+        resultsEl.innerHTML = renderStateBlock({
+          title: "Couldn't load listings",
+          description: res.error?.message ?? "Please try again.",
+          actionsHtml: `<button class="btn btn-primary" type="button" id="retry">Retry</button>`,
+        });
+        const retry = resultsEl.querySelector("#retry");
+        if (retry) retry.addEventListener("click", () => render());
+        toast("error", "Failed to load marketplace.");
+        return;
+      }
+
+      const { items, total, page, pageSize, filters } = res.data;
+      countEl.textContent = `${total} result${total === 1 ? "" : "s"}`;
+      pageEl.textContent = filters.q ? `Searching "${filters.q}"` : "";
+
+      if (!items.length) {
+        resultsEl.innerHTML = renderStateBlock({
+          title: "No listings match your filters",
+          description: "Try broadening your search, removing the price range, or clearing the category.",
+          actionsHtml: `<button class="btn btn-primary" type="button" id="clear">Clear filters</button>`,
+        });
+        const clear = resultsEl.querySelector("#clear");
+        if (clear) clear.addEventListener("click", () => (location.href = "/pages/marketplace.html"));
+        return;
+      }
+
+      resultsEl.innerHTML = `<div class="grid cols-3">${items.map((l) => renderListingCard(l)).join("")}</div>`;
+      renderPager({
+        page,
+        pageSize,
+        total,
+        currentParams: {
+          q: filters.q,
+          cat: filters.cat,
+          loc: filters.loc,
+          min: filters.min,
+          max: filters.max,
+          sort: filters.sort,
+        },
+      });
+    } catch (err) {
+      resultsEl.innerHTML = renderStateBlock({
+        title: "Error loading listings",
+        description: err.message || "An unexpected error occurred.",
+        actionsHtml: `<button class="btn btn-primary" type="button" id="retry">Retry</button>`,
+      });
+      const retry = resultsEl.querySelector("#retry");
+      if (retry) retry.addEventListener("click", () => render());
+    }
+  }
+
   // ── Order modal (injected once) ─────────────────────────────────────
   const orderModal = document.createElement("div");
   orderModal.className = "order-modal-backdrop";
@@ -422,110 +503,10 @@ if (root) {
     });
   }
 
-  function render() {
-    const parsed = readFiltersFromUrl();
-    if (!parsed.ok) {
-      resultsEl.innerHTML = renderStateBlock({
-        title: "Invalid filters",
-        description: "Some filter values in the URL are invalid. Reset filters to continue.",
-        actionsHtml: `<button class="btn btn-primary" type="button" id="fix-filters">Reset filters</button>`,
-      });
-      const btn = resultsEl.querySelector("#fix-filters");
-      if (btn) {
-        btn.addEventListener("click", () => {
-          history.replaceState(null, "", "/pages/marketplace.html");
-          render();
-        });
-      }
-      return;
-    }
-
-    const f = parsed.filters;
-    syncForm(f);
-
-    countEl.textContent = "Loading listings…";
-    pageEl.textContent = "";
-    pagerEl.innerHTML = "";
-    resultsEl.innerHTML = renderSkeletonCards(9);
-
-    // Simulated load delay to make skeleton meaningful.
-    window.setTimeout(() => {
-      const res = searchListings(new URLSearchParams(location.search));
-      if (!res.ok) {
-        resultsEl.innerHTML = renderStateBlock({
-          title: "Couldn’t load listings",
-          description: res.error.message ?? "Please try again.",
-          actionsHtml: `<button class="btn btn-primary" type="button" id="retry">Retry</button>`,
-        });
-        const retry = resultsEl.querySelector("#retry");
-        if (retry) retry.addEventListener("click", render);
-        toast("error", "Failed to load marketplace.");
-        return;
-      }
-
-      const { items, total, page, pageSize, filters } = res.data;
-      countEl.textContent = `${total} result${total === 1 ? "" : "s"}`;
-      pageEl.textContent = filters.q ? `Searching “${filters.q}”` : "";
-
-      if (!items.length) {
-        resultsEl.innerHTML = renderStateBlock({
-          title: "No listings match your filters",
-          description: "Try broadening your search, removing the price range, or clearing the category.",
-          actionsHtml: `<button class="btn btn-primary" type="button" id="clear">Clear filters</button>`,
-        });
-        const clear = resultsEl.querySelector("#clear");
-        if (clear) clear.addEventListener("click", () => (location.href = "/pages/marketplace.html"));
-        return;
-      }
-
-      resultsEl.innerHTML = `<div class="grid cols-3">${items.map((l) => renderListingCard(l)).join("")}</div>`;
-      injectOrderButtons(items);
-      renderPager({
-        page,
-        pageSize,
-        total,
-        currentParams: {
-          q: filters.q,
-          cat: filters.cat,
-          loc: filters.loc,
-          min: filters.min,
-          max: filters.max,
-          sort: filters.sort,
-        },
-      });
-    }, 260);
-  }
-
-  // Debounced function to apply all filters automatically
-  const applyFiltersDebounced = debounce(() => {
-    const fd = new FormData(form);
-    setQueryParams({
-      q: String(fd.get("q") ?? "").trim(),
-      cat: String(fd.get("cat") ?? "").trim(),
-      loc: String(fd.get("loc") ?? "").trim(),
-      min: String(fd.get("min") ?? "").trim(),
-      max: String(fd.get("max") ?? "").trim(),
-      sort: String(fd.get("sort") ?? "newest").trim(),
-      page: 1,  // Reset to page 1 on filter change
-    });
-    render();
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }, 300);  // 300ms delay before applying
-
-  // Attach debounced listeners to all filter inputs
-  const filterInputs = form.querySelectorAll("input, select");
-  filterInputs.forEach((input) => {
-    if (input.type === "text" || input.type === "email" || input.inputMode === "decimal") {
-      input.addEventListener("input", applyFiltersDebounced);
-    } else if (input.tagName === "SELECT") {
-      input.addEventListener("change", applyFiltersDebounced);
-    }
-  });
-
-  // Optional: Keep the submit button for manual apply (if desired), but make it less prominent
-  form.addEventListener("submit", (e) => {
+  // Optional: Keep the submit button for manual apply
+  form.addEventListener(“submit”, (e) => {
     e.preventDefault();
-    applyFiltersDebounced();  // Trigger immediately on submit
+    applyFiltersDebounced();
   });
 
   resetBtn.addEventListener("click", () => {
