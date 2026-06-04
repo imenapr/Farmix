@@ -246,7 +246,7 @@
 
 /* ─── Navbar ─────────────────────────────────────────────────────── */
 .nav {
-  position: relative;
+  position: sticky;
   z-index: 40;
 }
 
