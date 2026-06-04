@@ -1,6 +1,6 @@
 import { STORAGE_KEYS, ROLES } from "../app/config.js";
 import { emit } from "../app/events.js";
-import { loadDb, withDb } from "../data/db.js";
+import { getDb, withDb } from "../data/db.js";
 import { hashPasswordMock } from "../data/seed.js";
 import { validateLogin, validateSignup } from "../data/validators.js";
 import { createNotification } from "./notifications.service.js";
@@ -78,7 +78,7 @@ export function initAuthSession() {
       return;
     }
     
-    const db = loadDb();
+    const db = getDb();
     const user = db.users.find((u) => u.id === session.userId) ?? null;
     if (user?.suspended) {
       setSession(null);

@@ -87,7 +87,7 @@ export function createFreshDb() {
   });
 }
 
-export function loadDb() {
+export function getDb() {
   const raw = localStorage.getItem(STORAGE_KEYS.db);
   if (!raw) {
     const fresh = createFreshDb();
@@ -131,7 +131,7 @@ export function saveDb(nextDb) {
 }
 
 export function withDb(mutator) {
-  const db = loadDb();
+  const db = getDb();
   const next = mutator(structuredClone(db));
   saveDb(next);
   return next;

@@ -1,5 +1,5 @@
 import { initAuthSession, login } from "../services/auth.service.js";
-import { loadDb } from "../data/db.js";
+import { getDb } from "../data/db.js";
 import { ADMIN_ACCESS_KEY, ROLES } from "../app/config.js";
 import { initToasts } from "../components/toast.js";
 import { emit } from "../app/events.js";
@@ -17,7 +17,7 @@ initAuthSession();
   if (!verified || !raw) return;
   try {
     const session = JSON.parse(raw);
-    const db = loadDb();
+    const db = getDb();
     const user = db.users.find((u) => u.id === session.userId);
     if (user?.role === ROLES.admin && !user.suspended) {
       location.replace("/pages/admin-dashboard.html");
