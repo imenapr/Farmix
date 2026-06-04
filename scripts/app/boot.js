@@ -92,7 +92,11 @@ export function boot() {
   mountNavbar(navMount);
   mountFooter(footerMount);
 
-  initAuthSession();
-  mountGuestActionGates();
-  watchSession();
+  // Defer auth initialization to not block page render
+  // This happens in background without blocking UI
+  Promise.resolve().then(() => {
+    initAuthSession();
+    mountGuestActionGates();
+    watchSession();
+  });
 }

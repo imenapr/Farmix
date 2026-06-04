@@ -3,7 +3,7 @@ import { renderSkeletonCards, renderStateBlock } from "../app/ui.js";
 import { LISTING_STATUS } from "../app/config.js";
 import { renderListingCard } from "../components/listing-card.js";
 import { getCurrentUser } from "../services/auth.service.js";
-import { getDb } from "../services/db.provider.js";
+import { loadDb } from "../data/db.js";
 
 
 boot();
@@ -13,7 +13,7 @@ if (mount) {
   mount.innerHTML = renderSkeletonCards(6);
 
   window.setTimeout(() => {
-    const db = getDb();
+    const db = loadDb();
     const user = getCurrentUser();
     const isGuest = !user;
     const suspendedIds = new Set(db.users.filter((u) => u.suspended).map((u) => u.id));

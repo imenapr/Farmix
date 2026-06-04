@@ -43,35 +43,53 @@ export function getCurrentUser() {
 }
 
 // ─── initAuthSession ─────────────────────────────────────────────────────────
-// Synchronous bridge: reads the Supabase session directly from localStorage
-// (at the known key) so router-guards can call getCurrentUser() immediately.
+// Prioritizes Supabase session. Only loads local DB as fallback.
+// This allows Supabase-only mode where local DB is not needed.
 export function initAuthSession() {
-  const db = loadDb();
-
-  // 1. Try reading the live Supabase session synchronously from localStorage
+  // 1. Try Supabase session FIRST (primary for production)
   try {
     const raw = localStorage.getItem(SUPABASE_SESSION_KEY);
     if (raw) {
-      const parsed    = JSON.parse(raw);
-      const supaEmail = parsed?.user?.email;
-      if (supaEmail) {
-        const user = db.users.find((u) => u.email === supaEmail) ?? null;
-        if (user && !user.suspended) {
-          setCurrentUserInternal(user);
-          // Silently refresh the Supabase token in the background
-          supabase.auth.getSession().catch(() => {});
-          return;
-        }
+      const parsed = JSON.parse(raw);
+      const supaUser = parsed?.user;
+      if (supaUser?.email) {
+        // User from Supabase session - doesn't need local DB lookup
+        const user = {
+          id: supaUser.id,
+          email: supaUser.email,
+          name: supaUser.user_metadata?.name || supaUser.email.split("@")[0],
+          role: supaUser.user_metadata?.role || "consumer",
+          location: supaUser.user_metadata?.location || "",
+          createdAt: supaUser.created_at,
+        };
+        setCurrentUserInternal(user);
+        // Silently refresh the Supabase token in the background
+        supabase.auth.getSession().catch(() => {});
+        return;
       }
     }
   } catch { /* fall through */ }
 
-  // 2. Legacy localStorage session fallback
-  const session = getSession();
-  if (!session?.userId) { setCurrentUserInternal(null); return; }
-  const user = db.users.find((u) => u.id === session.userId) ?? null;
-  if (user?.suspended) { setSession(null); setCurrentUserInternal(null); return; }
-  setCurrentUserInternal(user);
+  // 2. Fallback to local DB session (legacy/testing only)
+  try {
+    const session = getSession();
+    if (!session?.userId) {
+      setCurrentUserInternal(null);
+      return;
+    }
+    
+    const db = loadDb();
+    const user = db.users.find((u) => u.id === session.userId) ?? null;
+    if (user?.suspended) {
+      setSession(null);
+      setCurrentUserInternal(null);
+      return;
+    }
+    setCurrentUserInternal(user);
+  } catch {
+    // If DB loading fails, just set user to null (Supabase mode)
+    setCurrentUserInternal(null);
+  }
 }
 
 // ─── logout ──────────────────────────────────────────────────────────────────
