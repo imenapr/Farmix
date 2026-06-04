@@ -46,7 +46,7 @@ export function getCurrentUser() {
 // Synchronous bridge: reads the Supabase session directly from localStorage
 // (at the known key) so router-guards can call getCurrentUser() immediately.
 export function initAuthSession() {
-  const db = getDb();
+  const db = loadDb();
 
   // 1. Try reading the live Supabase session synchronously from localStorage
   try {

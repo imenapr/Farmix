@@ -3,7 +3,8 @@
   margin-inline: auto;
 }
 
-.app-shell {
+.app-shell,
+[data-app-shell] {
   min-height: 100%;
   display: flex;
   flex-direction: column;
