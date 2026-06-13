@@ -18,6 +18,17 @@ export async function getUserById(userId) {
   return ok(userFromDb(data));
 }
 
+/** Resolve auth email from a profile phone number (for phone-based login). */
+export async function findEmailByPhone(phone) {
+  const value = String(phone ?? "").trim();
+  if (!value) return err("NOT_FOUND", "Phone number required.");
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("users").select("email").eq("phone", value).maybeSingle();
+  if (error || !data?.email) return err("NOT_FOUND", "No account found for this phone number.");
+  return ok({ email: data.email });
+}
+
 export async function updateProfile(userId, input) {
   const validation = validateProfileUpdate(input);
   if (!validation.ok) {

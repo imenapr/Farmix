@@ -8,8 +8,10 @@ import { validateMarketplaceFilters } from "../data/validators.js";
 import { renderListingCard } from "../components/listing-card.js";
 import { placeOrder } from "../services/orders.service.js";
 import { openGuestGate } from "../components/guest-gate.js";
+import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
 
 boot();
+translatePageHead("marketplace.pageTitle", "marketplace.pageSubtitle");
 
 /** Seed categories always appear; optional admin overrides in localStorage are merged by id. */
 function getCategories() {
@@ -38,47 +40,47 @@ if (root) {
         <section class="card pad">
           <form id="filters-form" class="filters-grid" novalidate>
             <label class="stack" style="gap:0.35rem;">
-              <span style="font-weight: 800;">Search</span>
-              <input class="input" name="q" placeholder="Tomatoes, honey, milk..." />
-              <span class="muted" style="font-size: var(--text-sm);">Updates after a short pause.</span>
+              <span style="font-weight: 800;">${t("marketplace.search")}</span>
+              <input class="input" name="q" placeholder="${t("marketplace.searchPlaceholder")}" />
+              <span class="muted" style="font-size: var(--text-sm);">${t("marketplace.searchHint")}</span>
             </label>
 
             <div class="filters-row">
               <label class="stack" style="gap:0.35rem;">
-                <span style="font-weight: 800;">Category</span>
+                <span style="font-weight: 800;">${t("common.category")}</span>
                 <select class="select" name="cat">
-                  <option value="">All categories</option>
+                  <option value="">${t("marketplace.allCategories")}</option>
                 </select>
               </label>
               <label class="stack" style="gap:0.35rem;">
-                <span style="font-weight: 800;">Location</span>
-                <input class="input" name="loc" placeholder="City / region" />
+                <span style="font-weight: 800;">${t("common.location")}</span>
+                <input class="input" name="loc" placeholder="${t("marketplace.locationPlaceholder")}" />
               </label>
             </div>
 
             <div class="filters-row">
               <label class="stack" style="gap:0.35rem;">
-                <span style="font-weight: 800;">Min price</span>
+                <span style="font-weight: 800;">${t("marketplace.minPrice")}</span>
                 <input class="input" name="min" inputmode="decimal" placeholder="0" />
               </label>
               <label class="stack" style="gap:0.35rem;">
-                <span style="font-weight: 800;">Max price</span>
+                <span style="font-weight: 800;">${t("marketplace.maxPrice")}</span>
                 <input class="input" name="max" inputmode="decimal" placeholder="100" />
               </label>
             </div>
 
             <label class="stack" style="gap:0.35rem;">
-              <span style="font-weight: 800;">Sort</span>
+              <span style="font-weight: 800;">${t("marketplace.sort")}</span>
               <select class="select" name="sort">
-                <option value="newest" selected>Newest</option>
-                <option value="price_asc">Price: low to high</option>
-                <option value="price_desc">Price: high to low</option>
+                <option value="newest" selected>${t("marketplace.sortNewest")}</option>
+                <option value="price_asc">${t("marketplace.sortPriceAsc")}</option>
+                <option value="price_desc">${t("marketplace.sortPriceDesc")}</option>
               </select>
             </label>
 
             <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
-              <button class="btn btn-primary" type="submit">Apply</button>
-              <button class="btn btn-ghost" type="button" data-reset>Reset</button>
+              <button class="btn btn-primary" type="submit">${t("common.apply")}</button>
+              <button class="btn btn-ghost" type="button" data-reset>${t("common.reset")}</button>
             </div>
           </form>
         </section>
@@ -86,12 +88,12 @@ if (root) {
 
       <div id="category-modal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
         <div style="background:white; padding:20px; border-radius:8px; max-width:500px; width:90%;">
-          <h3>Edit Categories (Admin)</h3>
+          <h3>${t("marketplace.editCategoriesAdmin")}</h3>
           <div id="category-list" style="margin:10px 0;"></div>
-          <button id="add-category" class="btn btn-primary">Add Category</button>
+          <button id="add-category" class="btn btn-primary">${t("marketplace.addCategory")}</button>
           <div style="margin-top:10px;">
-            <button id="save-categories" class="btn btn-primary">Save</button>
-            <button id="cancel-modal" class="btn btn-ghost">Cancel</button>
+            <button id="save-categories" class="btn btn-primary">${t("common.save")}</button>
+            <button id="cancel-modal" class="btn btn-ghost">${t("common.cancel")}</button>
           </div>
         </div>
       </div>
@@ -121,7 +123,7 @@ if (root) {
   if (user && user.role === 'admin') {
     const configOpt = document.createElement("option");
     configOpt.value = "config";
-    configOpt.textContent = "Config Categories";
+    configOpt.textContent = t("marketplace.configCategories");
     catSelect.appendChild(configOpt);
   }
 
@@ -147,7 +149,7 @@ if (root) {
       input.dataset.id = cat.id;
       input.style.flex = "1";
       const removeBtn = document.createElement("button");
-      removeBtn.textContent = "Remove";
+      removeBtn.textContent = t("common.remove");
       removeBtn.className = "btn btn-ghost";
       removeBtn.style.marginLeft = "10px";
       removeBtn.addEventListener("click", () => {
@@ -168,7 +170,7 @@ if (root) {
   });
 
   addBtn.addEventListener("click", () => {
-    const name = prompt("Enter new category name:");
+    const name = prompt(t("marketplace.enterCategoryName"));
     if (name && name.trim()) {
       const div = document.createElement("div");
       div.style.display = "flex";
@@ -181,7 +183,7 @@ if (root) {
       input.style.flex = "1";
       input.dataset.id = name.trim().toLowerCase().replace(/\s+/g, '_');
       const removeBtn = document.createElement("button");
-      removeBtn.textContent = "Remove";
+      removeBtn.textContent = t("common.remove");
       removeBtn.className = "btn btn-ghost";
       removeBtn.style.marginLeft = "10px";
       removeBtn.addEventListener("click", () => {
@@ -201,7 +203,7 @@ if (root) {
     })).filter(cat => cat.name);
     localStorage.setItem('farmix_categories', JSON.stringify(newCats));
     modal.style.display = "none";
-    toast("success", "Categories updated.");
+    toast("success", t("marketplace.categoriesUpdated"));
     // Reload to apply changes
     location.reload();
   });
@@ -216,6 +218,112 @@ if (root) {
   const pagerEl = qs(root, "[data-pager]");
   const resetBtn = qs(root, "[data-reset]");
   const qInput = qs(form, "input[name='q']");
+
+  let cachedResults = null;
+
+  function renderResultsBlock({ items, total, page, pageSize, filters }) {
+    cachedResults = { items, total, page, pageSize, filters };
+    countEl.textContent = total === 1 ? t("marketplace.result", { n: total }) : t("marketplace.results", { n: total });
+    pageEl.textContent = filters.q ? t("marketplace.searching", { q: filters.q }) : "";
+
+    if (!items.length) {
+      resultsEl.innerHTML = renderStateBlock({
+        title: t("marketplace.noMatch"),
+        description: t("marketplace.noMatchDesc"),
+        actionsHtml: `<button class="btn btn-primary" type="button" id="clear">${t("marketplace.clearFilters")}</button>`,
+      });
+      const clear = resultsEl.querySelector("#clear");
+      if (clear) clear.addEventListener("click", () => (location.href = "/pages/marketplace.html"));
+      pagerEl.innerHTML = "";
+      return;
+    }
+
+    resultsEl.innerHTML = `<div class="grid cols-3">${items.map((l) => renderListingCard(l)).join("")}</div>`;
+    injectOrderButtons(items);
+    renderPager({
+      page,
+      pageSize,
+      total,
+      currentParams: {
+        q: filters.q,
+        cat: filters.cat,
+        loc: filters.loc,
+        min: filters.min,
+        max: filters.max,
+        sort: filters.sort,
+      },
+    });
+  }
+
+  function translateOrderModal() {
+    const title = document.getElementById("om-title");
+    if (title) title.textContent = t("marketplace.orderProduct");
+    const qtyLabel = document.querySelector('label[for="om-qty"]');
+    if (qtyLabel) qtyLabel.textContent = t("marketplace.quantity");
+    const availLabels = document.querySelectorAll(".order-modal-field label");
+    if (availLabels[1]) availLabels[1].textContent = t("marketplace.availableLabel");
+    const totalLabel = document.querySelector(".order-modal-total-label");
+    if (totalLabel) totalLabel.textContent = t("common.total");
+    const cancelBtn = document.getElementById("om-cancel");
+    if (cancelBtn) cancelBtn.textContent = t("common.cancel");
+    const confirmBtn = document.getElementById("om-confirm");
+    if (confirmBtn && !confirmBtn.disabled) confirmBtn.textContent = t("marketplace.confirmOrder");
+  }
+
+  function restoreFormState(formEl, state) {
+    if (!formEl || !state) return;
+    formEl.elements.namedItem("q").value = state.q;
+    formEl.elements.namedItem("cat").value = state.cat;
+    formEl.elements.namedItem("loc").value = state.loc;
+    formEl.elements.namedItem("min").value = state.min;
+    formEl.elements.namedItem("max").value = state.max;
+    formEl.elements.namedItem("sort").value = state.sort;
+  }
+
+  function translateFilterLabels() {
+    const labels = form.querySelectorAll("label.stack > span, label.stack span[style]");
+    const texts = [
+      t("marketplace.search"),
+      t("common.category"),
+      t("common.location"),
+      t("marketplace.minPrice"),
+      t("marketplace.maxPrice"),
+      t("marketplace.sort"),
+    ];
+    labels.forEach((el, i) => { if (texts[i]) el.textContent = texts[i]; });
+
+    const qInputEl = form.elements.namedItem("q");
+    if (qInputEl) qInputEl.placeholder = t("marketplace.searchPlaceholder");
+    const locInputEl = form.elements.namedItem("loc");
+    if (locInputEl) locInputEl.placeholder = t("marketplace.locationPlaceholder");
+
+    const hint = form.querySelector(".muted");
+    if (hint) hint.textContent = t("marketplace.searchHint");
+
+    const catOpt = catSelect.querySelector('option[value=""]');
+    if (catOpt) catOpt.textContent = t("marketplace.allCategories");
+
+    const sortSelect = form.elements.namedItem("sort");
+    if (sortSelect) {
+      const opts = sortSelect.options;
+      if (opts[0]) opts[0].textContent = t("marketplace.sortNewest");
+      if (opts[1]) opts[1].textContent = t("marketplace.sortPriceAsc");
+      if (opts[2]) opts[2].textContent = t("marketplace.sortPriceDesc");
+    }
+
+    const applyBtn = form.querySelector('button[type="submit"]');
+    if (applyBtn) applyBtn.textContent = t("common.apply");
+    if (resetBtn) resetBtn.textContent = t("common.reset");
+
+    const configOpt = catSelect.querySelector('option[value="config"]');
+    if (configOpt) configOpt.textContent = t("marketplace.configCategories");
+
+    const modalTitle = modal.querySelector("h3");
+    if (modalTitle) modalTitle.textContent = t("marketplace.editCategoriesAdmin");
+    if (addBtn) addBtn.textContent = t("marketplace.addCategory");
+    if (saveBtn) saveBtn.textContent = t("common.save");
+    if (cancelBtn) cancelBtn.textContent = t("common.cancel");
+  }
 
   function setQueryParams(next) {
     const url = new URL(location.href);
@@ -259,7 +367,7 @@ if (root) {
 
     const prev = document.createElement("a");
     prev.className = `btn btn-ghost`;
-    prev.textContent = "Prev";
+    prev.textContent = t("common.prev");
     prev.href = "#";
     prev.setAttribute("aria-disabled", String(prevDisabled));
     prev.addEventListener("click", (e) => {
@@ -272,7 +380,7 @@ if (root) {
 
     const next = document.createElement("a");
     next.className = `btn btn-ghost`;
-    next.textContent = "Next";
+    next.textContent = t("common.next");
     next.href = "#";
     next.setAttribute("aria-disabled", String(nextDisabled));
     next.addEventListener("click", (e) => {
@@ -286,7 +394,7 @@ if (root) {
     const label = document.createElement("div");
     label.className = "muted";
     label.style.fontWeight = "650";
-    label.textContent = `Page ${page} of ${totalPages}`;
+    label.textContent = t("marketplace.pageOf", { page, total: totalPages });
 
     pagerEl.appendChild(prev);
     pagerEl.appendChild(label);
@@ -298,9 +406,9 @@ if (root) {
     const parsed = readFiltersFromUrl();
     if (!parsed.ok) {
       resultsEl.innerHTML = renderStateBlock({
-        title: "Invalid filters",
-        description: "Some filter values in the URL are invalid. Reset filters to continue.",
-        actionsHtml: `<button class="btn btn-primary" type="button" id="fix-filters">Reset filters</button>`,
+        title: t("marketplace.invalidFilters"),
+        description: t("marketplace.invalidFiltersDesc"),
+        actionsHtml: `<button class="btn btn-primary" type="button" id="fix-filters">${t("marketplace.resetFilters")}</button>`,
       });
       const btn = resultsEl.querySelector("#fix-filters");
       if (btn) {
@@ -315,7 +423,7 @@ if (root) {
     const f = parsed.filters;
     syncForm(f);
 
-    countEl.textContent = "Loading listings…";
+    countEl.textContent = t("marketplace.loadingListings");
     pageEl.textContent = "";
     pagerEl.innerHTML = "";
     resultsEl.innerHTML = renderSkeletonCards(9);
@@ -324,51 +432,23 @@ if (root) {
       const res = await searchListings(new URLSearchParams(location.search));
       if (!res.ok) {
         resultsEl.innerHTML = renderStateBlock({
-          title: "Couldn't load listings",
-          description: res.error?.message ?? "Please try again.",
-          actionsHtml: `<button class="btn btn-primary" type="button" id="retry">Retry</button>`,
+          title: t("marketplace.couldntLoad"),
+          description: res.error?.message ?? t("marketplace.tryAgain"),
+          actionsHtml: `<button class="btn btn-primary" type="button" id="retry">${t("common.retry")}</button>`,
         });
         const retry = resultsEl.querySelector("#retry");
         if (retry) retry.addEventListener("click", () => render());
-        toast("error", "Failed to load marketplace.");
+        toast("error", t("marketplace.loadFailed"));
         return;
       }
 
       const { items, total, page, pageSize, filters } = res.data;
-      countEl.textContent = `${total} result${total === 1 ? "" : "s"}`;
-      pageEl.textContent = filters.q ? `Searching "${filters.q}"` : "";
-
-      if (!items.length) {
-        resultsEl.innerHTML = renderStateBlock({
-          title: "No listings match your filters",
-          description: "Try broadening your search, removing the price range, or clearing the category.",
-          actionsHtml: `<button class="btn btn-primary" type="button" id="clear">Clear filters</button>`,
-        });
-        const clear = resultsEl.querySelector("#clear");
-        if (clear) clear.addEventListener("click", () => (location.href = "/pages/marketplace.html"));
-        return;
-      }
-
-      resultsEl.innerHTML = `<div class="grid cols-3">${items.map((l) => renderListingCard(l)).join("")}</div>`;
-      injectOrderButtons(items);
-      renderPager({
-        page,
-        pageSize,
-        total,
-        currentParams: {
-          q: filters.q,
-          cat: filters.cat,
-          loc: filters.loc,
-          min: filters.min,
-          max: filters.max,
-          sort: filters.sort,
-        },
-      });
+      renderResultsBlock({ items, total, page, pageSize, filters });
     } catch (err) {
       resultsEl.innerHTML = renderStateBlock({
-        title: "Error loading listings",
-        description: err.message || "An unexpected error occurred.",
-        actionsHtml: `<button class="btn btn-primary" type="button" id="retry">Retry</button>`,
+        title: t("marketplace.errorLoading"),
+        description: err.message || t("marketplace.unexpectedError"),
+        actionsHtml: `<button class="btn btn-primary" type="button" id="retry">${t("common.retry")}</button>`,
       });
       const retry = resultsEl.querySelector("#retry");
       if (retry) retry.addEventListener("click", () => render());
@@ -381,23 +461,23 @@ if (root) {
   orderModal.style.display = "none";
   orderModal.innerHTML = `
     <div class="order-modal-card">
-      <h3 class="order-modal-title" id="om-title">Order product</h3>
+      <h3 class="order-modal-title" id="om-title">${t("marketplace.orderProduct")}</h3>
       <p class="order-modal-meta" id="om-meta"></p>
       <div class="order-modal-row">
         <div class="order-modal-field">
-          <label for="om-qty">Quantity</label>
+          <label for="om-qty">${t("marketplace.quantity")}</label>
           <input class="order-qty-input" id="om-qty" type="number" min="1" value="1" />
         </div>
         <div class="order-modal-field">
-          <label>Available</label>
+          <label>${t("marketplace.availableLabel")}</label>
           <div id="om-avail" style="font-size:1rem;font-weight:700;padding-top:0.4rem;color:var(--color-navy);">—</div>
         </div>
       </div>
-      <div class="order-modal-total-label">Total</div>
+      <div class="order-modal-total-label">${t("common.total")}</div>
       <div class="order-modal-total-val" id="om-total">$0.00</div>
       <div class="order-modal-actions">
-        <button class="btn btn-ghost" id="om-cancel">Cancel</button>
-        <button class="btn btn-primary" id="om-confirm">Confirm Order</button>
+        <button class="btn btn-ghost" id="om-cancel">${t("common.cancel")}</button>
+        <button class="btn btn-primary" id="om-confirm">${t("marketplace.confirmOrder")}</button>
       </div>
     </div>
   `;
@@ -441,11 +521,11 @@ if (root) {
 
     const btn = document.getElementById("om-confirm");
     btn.disabled = true;
-    btn.textContent = "Placing…";
+    btn.textContent = t("marketplace.placing");
 
     const result = await placeOrder(curUser.id, omListingId, qty);
     btn.disabled = false;
-    btn.textContent = "Confirm Order";
+    btn.textContent = t("marketplace.confirmOrder");
 
     if (!result.ok) {
       toast("error", result.error.message);
@@ -453,7 +533,7 @@ if (root) {
     }
 
     orderModal.style.display = "none";
-    toast("success", `Order placed — ${qty} ${omUnit} of "${result.data.title}"!`);
+    toast("success", t("marketplace.orderPlaced", { qty, unit: omUnit, title: result.data.title }));
 
     // Update the card in-place: refresh stock display and disable button if exhausted
     const card = resultsEl.querySelector(`[data-listing-id="${CSS.escape(omListingId)}"]`);
@@ -461,14 +541,14 @@ if (root) {
       const newQty = omMaxQty - qty;
       card.setAttribute("data-qty", newQty);
       const availEl = card.querySelector(".listing-avail");
-      if (availEl) availEl.textContent = newQty > 0 ? `${newQty} avail.` : "Out of stock";
+      if (availEl) availEl.textContent = newQty > 0 ? t("listing.availableShort", { n: newQty }) : t("marketplace.outOfStock");
       const orderBtn = card.querySelector(".btn-order");
       if (orderBtn && newQty <= 0) {
         orderBtn.disabled = true;
-        orderBtn.textContent = "Out of stock";
+        orderBtn.textContent = t("marketplace.outOfStock");
       }
       if (newQty <= 0 && qty > 0) {
-        toast("error", "Inventory low — this listing is now sold out!");
+        toast("error", t("marketplace.inventoryLow"));
       }
     }
   });
@@ -489,7 +569,7 @@ if (root) {
       const btn = document.createElement("button");
       btn.className = "btn-order";
       btn.type = "button";
-      btn.textContent = qty > 0 ? "Add to Order" : "Out of stock";
+      btn.textContent = qty > 0 ? t("marketplace.addToOrder") : t("marketplace.outOfStock");
       btn.disabled = qty <= 0;
       btn.addEventListener("click", (e) => {
         e.preventDefault();
@@ -531,5 +611,12 @@ if (root) {
   });
 
   render();
+
+  onLanguageChange(() => {
+    translatePageHead("marketplace.pageTitle", "marketplace.pageSubtitle");
+    translateFilterLabels();
+    translateOrderModal();
+    if (cachedResults) renderResultsBlock(cachedResults);
+  });
 }
 

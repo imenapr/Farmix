@@ -4,7 +4,9 @@ import { getSupabase } from "../lib/supabase.js";
 import { userFromDb } from "../lib/transform.js";
 import { validateLogin, validateSignup } from "../data/validators.js";
 import { createNotification } from "./notifications.service.js";
+import { findEmailByPhone } from "./users.service.js";
 import { ROLES } from "../app/config.js";
+import { t } from "../app/i18n.js";
 
 /** @typedef {{ ok: true, data: any } | { ok: false, error: { code: string, message: string, fieldErrors?: Record<string,string> } }} Result */
 
@@ -149,11 +151,11 @@ export async function logout() {
 
 export async function signup(input) {
   const v = validateSignup(input);
-  if (!v.ok) return err("VALIDATION_FAILED", "Fix the highlighted fields.", v.fieldErrors);
+  if (!v.ok) return err("VALIDATION_FAILED", t("service.fixHighlighted", { default: "Fix the highlighted fields." }), v.fieldErrors);
 
   const { email, password, role, name, location, phone, farmName, companyName } = v.value;
   if (![ROLES.farmer, ROLES.business, ROLES.consumer].includes(role)) {
-    return err("VALIDATION_FAILED", "Select a valid role.");
+    return err("VALIDATION_FAILED", t("service.roleInvalid", { default: "Select a valid role." }));
   }
 
   const supabase = getSupabase();
@@ -165,13 +167,13 @@ export async function signup(input) {
 
   if (signError) {
     if (signError.message?.toLowerCase().includes("already registered")) {
-      return err("CONFLICT", "An account with this email already exists.");
+      return err("CONFLICT", t("service.emailExists", { default: "An account with this email already exists." }));
     }
     return err("AUTH_ERROR", signError.message);
   }
 
   const authUser = signData.user;
-  if (!authUser?.id) return err("AUTH_ERROR", "Failed to create account.");
+  if (!authUser?.id) return err("AUTH_ERROR", t("service.createAccountFailed", { default: "Failed to create account." }));
 
   const now = new Date().toISOString();
   const profileRow = {
@@ -188,7 +190,7 @@ export async function signup(input) {
   };
 
   const saved = await upsertUserProfile(profileRow);
-  if (!saved) return err("DB_ERROR", "Account created but profile save failed. Try logging in.");
+  if (!saved) return err("DB_ERROR", t("service.profileSaveFailed", { default: "Account created but profile save failed. Try logging in." }));
 
   const userPublic = userFromDb(profileRow);
   setCurrentUserInternal(userPublic);
@@ -199,7 +201,7 @@ export async function signup(input) {
       createNotification({
         userId: admin.id,
         type: "system",
-        title: "New farmer registered",
+        title: t("service.newFarmer", { default: "New farmer registered" }),
         message: `New farmer registered: ${name} (${email})`,
         metadata: { farmerId: authUser.id, farmerName: name, farmerEmail: email },
       });
@@ -211,14 +213,21 @@ export async function signup(input) {
 
 export async function login(input) {
   const v = validateLogin(input);
-  if (!v.ok) return err("VALIDATION_FAILED", "Fix the highlighted fields.", v.fieldErrors);
+  if (!v.ok) return err("VALIDATION_FAILED", t("service.fixHighlighted", { default: "Fix the highlighted fields." }), v.fieldErrors);
 
-  const { email, password } = v.value;
+  const { email: identifier, password, isPhoneLogin } = v.value;
   const supabase = getSupabase();
+
+  let email = identifier;
+  if (isPhoneLogin) {
+    const lookup = await findEmailByPhone(identifier);
+    if (!lookup.ok) return err("AUTH_FAILED", t("service.phoneNotFound", { default: "No account found for this phone number." }));
+    email = lookup.data.email;
+  }
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error || !data?.user?.id) {
-    return err("AUTH_FAILED", "Invalid email or password.");
+    return err("AUTH_FAILED", t("service.invalidCredentials", { default: "Invalid email or password." }));
   }
 
   let profile = await fetchUserProfile(data.user.id);
@@ -240,44 +249,15 @@ export async function login(input) {
 
   if (profile.suspended) {
     await supabase.auth.signOut();
-    return err("ACCOUNT_SUSPENDED", "Your account has been suspended. Please contact support.");
+    return err("ACCOUNT_SUSPENDED", t("service.accountSuspended", { default: "Your account has been suspended. Please contact support." }));
   }
 
-  setCurrentUserInternal(profile);
-  return ok({ user: profile });
-}
-
-/** Google OAuth — creates/updates Supabase-linked profile row. */
-export async function loginWithGoogle(googleUser) {
-  const { email, name, picture } = googleUser;
-  const supabase = getSupabase();
-
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user?.id) {
-    return err("AUTH_REQUIRED", "Complete Google sign-in first.");
-  }
-
-  const existing = await fetchUserProfile(session.user.id);
-  const now = new Date().toISOString();
-  const row = {
-    id: session.user.id,
-    email: email ?? session.user.email,
-    role: existing?.role ?? ROLES.consumer,
-    name: name ?? existing?.name ?? "User",
-    location: existing?.location ?? "",
-    avatar_url: picture ?? existing?.avatarUrl ?? null,
-    updated_at: now,
-    created_at: existing?.createdAt ?? now,
-  };
-
-  await upsertUserProfile(row);
-  const profile = userFromDb(row);
   setCurrentUserInternal(profile);
   return ok({ user: profile });
 }
 
 export function requireAuth() {
-  if (!currentUser) return err("AUTH_REQUIRED", "Login required.");
+  if (!currentUser) return err("AUTH_REQUIRED", t("common.loginRequired"));
   return ok({ user: currentUser });
 }
 

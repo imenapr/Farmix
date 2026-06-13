@@ -4,8 +4,11 @@ import { getListingById } from "../app/state.js";
 import { escapeHtml, renderStateBlock, toast, qs, setText } from "../app/ui.js";
 import { incrementListingView, archiveListingAsOwnerOrAdmin } from "../services/listings.service.js";
 import { createInquiry } from "../services/messages.service.js";
+import { getUserById } from "../services/users.service.js";
+import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
 
 boot();
+translatePageHead("product.pageTitle");
 
 function avg(values) {
   if (!Array.isArray(values) || !values.length) return null;
@@ -14,35 +17,51 @@ function avg(values) {
 }
 
 function ratingText(value) {
-  return value === null ? "No ratings" : `${value}/5`;
+  return value === null ? t("common.noRatings") : `${value}/5`;
 }
 
 const root = document.getElementById("product-root");
 if (!root) throw new Error("Missing #product-root");
 
-async function initPage() {
-  const id = new URLSearchParams(location.search).get("id");
-  if (!id) {
+let listing = null;
+let listingId = null;
+let phoneRevealed = false;
+let phoneValue = null;
+let descExpanded = false;
+let viewsCounted = false;
+let inquiryDraft = "";
+
+async function loadListing() {
+  listingId = new URLSearchParams(location.search).get("id");
+  if (!listingId) {
     root.innerHTML = renderStateBlock({
-      title: "Missing listing ID",
-      description: "Return to the marketplace and open a listing.",
-      actionsHtml: `<a class="btn btn-primary" href="/pages/marketplace.html">Back to marketplace</a>`,
+      title: t("product.missingIdTitle"),
+      description: t("product.missingIdDesc"),
+      actionsHtml: `<a class="btn btn-primary" href="/pages/marketplace.html">${t("product.backToMarketplace")}</a>`,
     });
     return;
   }
 
-  const res = await getListingById(id);
+  const res = await getListingById(listingId);
   if (!res.ok) {
     root.innerHTML = renderStateBlock({
-      title: "Listing not found",
-      description: "This listing may have been archived or removed.",
-      actionsHtml: `<a class="btn btn-primary" href="/pages/marketplace.html">Back to marketplace</a>`,
+      title: t("product.notFoundTitle"),
+      description: t("product.notFoundDesc"),
+      actionsHtml: `<a class="btn btn-primary" href="/pages/marketplace.html">${t("product.backToMarketplace")}</a>`,
     });
     return;
   }
 
-  const listing = res.data;
-  incrementListingView(listing.id);
+  listing = res.data;
+  if (!viewsCounted) {
+    incrementListingView(listing.id);
+    viewsCounted = true;
+  }
+  renderPage();
+}
+
+function renderPage() {
+  if (!listing || !listingId) return;
 
   const user = getCurrentUser();
   const isOwner = user && user.id === listing.sellerId;
@@ -69,7 +88,7 @@ async function initPage() {
             ${images
               .map(
                 (img, idx) => `
-              <button type="button" class="thumb-btn ${idx === 0 ? "is-active" : ""}" data-thumb="${idx}" aria-label="Preview image ${idx + 1}">
+              <button type="button" class="thumb-btn ${idx === 0 ? "is-active" : ""}" data-thumb="${idx}" aria-label="${escapeHtml(t("product.previewImage", { n: idx + 1 }))}">
                 <img src="${escapeHtml(img)}" alt="${escapeHtml(listing.title)} image ${idx + 1}" />
               </button>
             `,
@@ -85,27 +104,27 @@ async function initPage() {
           <div class="listing-meta" style="margin-top:0.6rem;">
             <span class="pill">${escapeHtml(listing.categoryId)}</span>
             <span class="pill">${escapeHtml(listing.location || "")}</span>
-            <span class="pill">${escapeHtml(String(listing.quantityAvailable))} available</span>
-            <span class="pill" style="color: #666;">${listing.status === "active" ? "Available" : listing.status === "sold" ? "Sold" : "Archived"}</span>
+            <span class="pill">${escapeHtml(String(listing.quantityAvailable))} ${t("product.available")}</span>
+            <span class="pill" style="color: #666;">${listing.status === "active" ? t("product.status.available") : listing.status === "sold" ? t("product.status.sold") : t("product.status.archived")}</span>
           </div>
 
           <div class="rating-grid" style="margin-top:0.8rem;">
-            <div class="rating-item"><span class="muted">Delivery</span><strong>${escapeHtml(ratingText(delivery))}</strong></div>
-            <div class="rating-item"><span class="muted">Food quality</span><strong>${escapeHtml(ratingText(quality))}</strong></div>
-            <div class="rating-item"><span class="muted">Overall</span><strong>${escapeHtml(ratingText(overall))}</strong></div>
+            <div class="rating-item"><span class="muted">${t("product.delivery")}</span><strong>${escapeHtml(ratingText(delivery))}</strong></div>
+            <div class="rating-item"><span class="muted">${t("product.foodQuality")}</span><strong>${escapeHtml(ratingText(quality))}</strong></div>
+            <div class="rating-item"><span class="muted">${t("product.overall")}</span><strong>${escapeHtml(ratingText(overall))}</strong></div>
           </div>
 
           <div class="desc-wrap">
             <p class="product-desc is-collapsed" data-desc>${escapeHtml(listing.description || "")}</p>
-            <button class="btn btn-ghost" type="button" data-desc-toggle>Read more</button>
+            <button class="btn btn-ghost" type="button" data-desc-toggle>${t("product.readMore")}</button>
           </div>
 
           ${
             canManage
               ? `
             <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1rem;">
-              <a class="btn btn-ghost" href="/pages/edit-listing.html?id=${id}">Edit</a>
-              <button class="btn btn-ghost" type="button" data-delete style="color: #d32f2f;">Delete</button>
+              <a class="btn btn-ghost" href="/pages/edit-listing.html?id=${listingId}">${t("product.edit")}</a>
+              <button class="btn btn-ghost" type="button" data-delete style="color: #d32f2f;">${t("product.delete")}</button>
             </div>
           `
               : ""
@@ -115,13 +134,31 @@ async function initPage() {
 
       <aside class="stack">
         <section class="card pad seller-box">
-          <div class="pill">Seller</div>
-          <div style="font-weight:850; letter-spacing:-0.01em;">${escapeHtml(listing.sellerName || "Unknown Seller")}</div>
+          <div class="pill">${t("product.seller")}</div>
+          <div style="font-weight:850; letter-spacing:-0.01em;">${escapeHtml(listing.sellerName || t("product.unknownSeller"))}</div>
           <div class="muted" style="font-size:var(--text-sm);">${escapeHtml(listing.sellerLocation || listing.location || "")}</div>
+          ${
+            !isOwner
+              ? phoneRevealed
+                ? `
+          <div class="seller-phone-area" data-seller-phone-area>
+            ${
+              phoneValue
+                ? `<span class="muted" style="font-size:var(--text-sm);">${t("common.phone")}</span>
+                   <a class="seller-phone-value" href="tel:${escapeHtml(phoneValue.replace(/\D/g, ""))}">${escapeHtml(phoneValue)}</a>`
+                : `<span class="muted" style="font-size:var(--text-sm);">${t("product.phoneMissing")}</span>`
+            }
+          </div>`
+                : `
+          <div class="seller-phone-area" data-seller-phone-area hidden></div>
+          <button class="btn btn-primary btn-sm" type="button" data-reveal-phone>${t("product.revealPhone")}</button>
+          `
+              : ""
+          }
           <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.35rem;">
             ${
               !user
-                ? `<div class="muted" style="font-size:var(--text-sm); margin-top:0.25rem;">Login to send inquiries and view seller profile.</div>`
+                ? `<div class="muted" style="font-size:var(--text-sm); margin-top:0.25rem;">${t("product.loginPrompt")}</div>`
                 : ""
             }
           </div>
@@ -131,30 +168,16 @@ async function initPage() {
           user && !isOwner
             ? `
         <section class="card pad">
-          <h2 style="margin:0 0 0.6rem; letter-spacing:-0.01em;">Send inquiry</h2>
+          <h2 style="margin:0 0 0.6rem; letter-spacing:-0.01em;">${t("product.sendInquiry")}</h2>
+          <p class="muted" style="font-size:var(--text-sm); margin:0 0 0.75rem;">${t("product.profileShared")}</p>
           <form id="inquiry-form" class="stack" novalidate>
             <label class="stack" style="gap:0.35rem;">
-              <span style="font-weight:800;">Name</span>
-              <input class="input" name="name" value="${escapeHtml(user.name || "")}" required />
-              <span class="error-text" data-err="name"></span>
-            </label>
-            <label class="stack" style="gap:0.35rem;">
-              <span style="font-weight:800;">Email</span>
-              <input class="input" name="email" type="email" value="${escapeHtml(user.email || "")}" required />
-              <span class="error-text" data-err="email"></span>
-            </label>
-            <label class="stack" style="gap:0.35rem;">
-              <span style="font-weight:800;">Phone (optional)</span>
-              <input class="input" name="phone" />
-              <span class="error-text" data-err="phone"></span>
-            </label>
-            <label class="stack" style="gap:0.35rem;">
-              <span style="font-weight:800;">Message</span>
-              <textarea class="input" name="body" rows="5" required placeholder="What quantity do you need? Pickup or delivery?"></textarea>
+              <span style="font-weight:800;">${t("product.message")}</span>
+              <textarea class="input" name="body" rows="5" required placeholder="${t("product.inquiryPlaceholder")}"></textarea>
               <span class="error-text" data-err="body"></span>
             </label>
             <p class="error-text" data-err="form" style="margin:0;"></p>
-            <button class="btn btn-primary" type="submit" data-submit>Send inquiry</button>
+            <button class="btn btn-primary" type="submit" data-submit>${t("product.sendInquiry")}</button>
           </form>
         </section>
       `
@@ -181,52 +204,94 @@ async function initPage() {
   if (String(listing.description ?? "").length <= 180) {
     desc.classList.remove("is-collapsed");
     descToggle.style.display = "none";
+  } else if (descExpanded) {
+    desc.classList.remove("is-collapsed");
+    descToggle.textContent = t("product.showLess");
+  } else {
+    desc.classList.add("is-collapsed");
+    descToggle.textContent = t("product.readMore");
   }
   descToggle.addEventListener("click", () => {
-    const expanded = !desc.classList.contains("is-collapsed");
-    if (expanded) {
-      desc.classList.add("is-collapsed");
-      descToggle.textContent = "Read more";
-    } else {
+    const isCollapsed = desc.classList.contains("is-collapsed");
+    if (isCollapsed) {
       desc.classList.remove("is-collapsed");
-      descToggle.textContent = "Show less";
+      descExpanded = true;
+      descToggle.textContent = t("product.showLess");
+    } else {
+      desc.classList.add("is-collapsed");
+      descExpanded = false;
+      descToggle.textContent = t("product.readMore");
     }
   });
 
   const deleteBtn = root.querySelector("[data-delete]");
   if (deleteBtn && canManage) {
     deleteBtn.addEventListener("click", async () => {
-      if (!confirm("Are you sure you want to delete this listing? This action cannot be undone.")) return;
+      if (!confirm(t("product.deleteConfirm"))) return;
 
       deleteBtn.disabled = true;
-      deleteBtn.textContent = "Deleting...";
+      deleteBtn.textContent = t("product.deleting");
 
-      const delRes = await archiveListingAsOwnerOrAdmin(id, user.id, user.role);
+      const delRes = await archiveListingAsOwnerOrAdmin(listingId, user.id, user.role);
       if (!delRes.ok) {
         deleteBtn.disabled = false;
-        deleteBtn.textContent = "Delete";
-        toast("error", delRes.error?.message ?? "Failed to delete listing");
+        deleteBtn.textContent = t("product.delete");
+        toast("error", delRes.error?.message ?? t("product.deleteFailed"));
         return;
       }
 
-      toast("success", "Listing deleted successfully");
+      toast("success", t("product.deleteSuccess"));
       setTimeout(() => { window.location.href = "/pages/marketplace.html"; }, 1000);
+    });
+  }
+
+  const revealBtn = root.querySelector("[data-reveal-phone]");
+  if (revealBtn) {
+    revealBtn.addEventListener("click", async () => {
+      if (!user) {
+        const next = encodeURIComponent(location.pathname + location.search);
+        location.href = `/pages/login.html?next=${next}`;
+        return;
+      }
+
+      revealBtn.disabled = true;
+      revealBtn.textContent = t("common.loading");
+
+      const sellerRes = await getUserById(listing.sellerId);
+      if (!sellerRes.ok) {
+        revealBtn.disabled = false;
+        revealBtn.textContent = t("product.revealPhone");
+        toast("error", sellerRes.error?.message ?? t("product.phoneLoadFailed"));
+        return;
+      }
+
+      const phone = sellerRes.data.phone;
+      phoneRevealed = true;
+      phoneValue = phone || null;
+      renderPage();
     });
   }
 
   const form = root.querySelector("#inquiry-form");
   if (form) {
+    const bodyInput = form.elements.namedItem("body");
+    if (bodyInput && inquiryDraft) bodyInput.value = inquiryDraft;
+
     const submitBtn = qs(form, "[data-submit]");
     const err = (k) => qs(form, `[data-err='${k}']`);
 
     function clearErrors() {
-      for (const k of ["name", "email", "phone", "body", "form"]) setText(err(k), "");
+      for (const k of ["body", "form"]) setText(err(k), "");
     }
 
     function setLoading(isLoading) {
       submitBtn.disabled = isLoading;
-      submitBtn.textContent = isLoading ? "Sending..." : "Send inquiry";
+      submitBtn.textContent = isLoading ? t("product.sending") : t("product.sendInquiry");
     }
+
+    bodyInput?.addEventListener("input", () => {
+      inquiryDraft = bodyInput.value;
+    });
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -235,9 +300,6 @@ async function initPage() {
 
       const fd = new FormData(form);
       const r = await createInquiry(user.id, listing.id, {
-        name: fd.get("name"),
-        email: fd.get("email"),
-        phone: fd.get("phone"),
         body: fd.get("body"),
       });
 
@@ -248,17 +310,20 @@ async function initPage() {
           const el = form.querySelector(`[data-err='${k}']`);
           if (el) el.textContent = msg;
         }
-        setText(err("form"), r.error.message ?? "Failed to send inquiry.");
+        setText(err("form"), r.error.message ?? t("product.inquiryFailed"));
         return;
       }
 
       setLoading(false);
-      toast("success", "Inquiry sent successfully!");
+      toast("success", t("product.inquirySent"));
       form.reset();
-      form.elements.namedItem("name").value = user.name ?? "";
-      form.elements.namedItem("email").value = user.email ?? "";
+      inquiryDraft = "";
     });
   }
 }
 
-initPage();
+loadListing();
+onLanguageChange(() => {
+  translatePageHead("product.pageTitle");
+  if (listing) renderPage();
+});

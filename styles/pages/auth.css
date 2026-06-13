@@ -263,25 +263,6 @@
   margin-bottom: 0.95rem;
 }
 
-/* ─── Divider ────────────────────────────────────────────────────── */
-.auth-divider {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  margin: 1.35rem 0;
-  color: var(--color-subtle);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.auth-divider::before,
-.auth-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--color-border);
-}
-
 /* ─── Footer link ────────────────────────────────────────────────── */
 .auth-footer {
   margin-top: 1.35rem;
@@ -299,12 +280,6 @@
 
 .auth-footer a:hover {
   color: var(--color-primary-800);
-}
-
-/* ─── Google button container ────────────────────────────────────── */
-.google-btn-wrap {
-  display: flex;
-  justify-content: center;
 }
 
 /* ─── Responsive ─────────────────────────────────────────────────── */

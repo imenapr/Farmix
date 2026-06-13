@@ -1,5 +1,6 @@
 import { escapeHtml } from "../app/ui.js";
 import { CATEGORIES } from "../data/seed.js";
+import { t } from "../app/i18n.js";
 
 // Curated photography for seeded products — matched by title keyword at render time
 // so already-seeded localStorage data picks up the real images without a reseed.
@@ -27,12 +28,12 @@ function avg(values) {
 }
 
 function starsHtml(value) {
-  if (value === null) return `<span class="rating-no-data">No ratings yet</span>`;
+  if (value === null) return `<span class="rating-no-data">${t("listing.noRatingsYet")}</span>`;
   const filled = Math.round(value);
   const empty = 5 - filled;
   const stars = "★".repeat(Math.max(0, filled)) + "☆".repeat(Math.max(0, empty));
   return `
-    <span class="rating-stars" aria-label="${value} out of 5 stars">${stars}</span>
+    <span class="rating-stars" aria-label="${t("listing.starsLabel", { value })}">${stars}</span>
     <span class="rating-val">${value}</span>
   `;
 }
@@ -58,10 +59,10 @@ export function renderListingCard(listing, { compact = false, maskLocation = fal
     ? category.name
     : listing.categoryId
     ? String(listing.categoryId)
-    : "Uncategorized";
+    : t("listing.uncategorized");
 
   const href = `/pages/product.html?id=${encodeURIComponent(listing.id)}`;
-  const locationText = maskLocation ? "Login to see exact location" : String(listing.location ?? "");
+  const locationText = maskLocation ? t("listing.loginToSeeLocation") : String(listing.location ?? "");
 
   return `
     <article class="listing-card glass-card"
@@ -70,7 +71,7 @@ export function renderListingCard(listing, { compact = false, maskLocation = fal
       data-seller-id="${escapeHtml(listing.sellerId ?? "")}"
       ${compact ? 'data-compact="true"' : ""}>
 
-      <a class="listing-media" href="${href}" aria-label="View ${escapeHtml(listing.title)}">
+      <a class="listing-media" href="${href}" aria-label="${escapeHtml(t("listing.viewProduct", { title: listing.title }))}">
         <img src="${escapeHtml(img)}" alt="${escapeHtml(listing.title)}" loading="lazy" />
         <div class="listing-media-overlay">
           <span class="listing-badge-cat">${escapeHtml(categoryName)}</span>
@@ -87,7 +88,7 @@ export function renderListingCard(listing, { compact = false, maskLocation = fal
               ${PIN_SVG}
               ${escapeHtml(locationText)}
             </span>
-            ${qty > 0 ? `<span class="listing-avail">${escapeHtml(String(qty))} avail.</span>` : ""}
+            ${qty > 0 ? `<span class="listing-avail">${escapeHtml(t("listing.availableShort", { n: qty }))}</span>` : ""}
           </div>
         </div>
 

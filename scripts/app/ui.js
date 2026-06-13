@@ -37,7 +37,7 @@ export function renderStateBlock({ title, description, actionsHtml = "" }) {
     <section class="state-block">
       <h2 class="state-title">${escapeHtml(title)}</h2>
       <p class="state-desc">${escapeHtml(description)}</p>
-      ${actionsHtml ? `<div style="margin-top:0.85rem; display:flex; gap:0.6rem; flex-wrap:wrap;">${actionsHtml}</div>` : ""}
+      ${actionsHtml ? `<div style="margin-top:0.85rem; display:flex; gap:0.6rem; flex-wrap:wrap; justify-content:center;">${actionsHtml}</div>` : ""}
     </section>
   `;
 }

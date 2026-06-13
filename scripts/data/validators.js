@@ -1,5 +1,6 @@
 import { ROLES } from "../app/config.js";
 import { CATEGORIES } from "./seed.js";
+import { t } from "../app/i18n.js";
 
 const ALLOWED_CATEGORY_IDS = new Set(CATEGORIES.map((c) => c.id));
 
@@ -23,13 +24,13 @@ function clampNumber(n, { min = -Infinity, max = Infinity } = {}) {
 export function validateEmail(email) {
   const value = String(email ?? "").trim().toLowerCase();
   const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!re.test(value)) return fail({ email: "Enter a valid email address." });
+  if (!re.test(value)) return fail({ email: t("validation.emailInvalid", { default: "Enter a valid email address." }) });
   return ok(value);
 }
 
 export function validatePassword(password) {
   const value = String(password ?? "");
-  if (value.length < 8) return fail({ password: "Password must be at least 8 characters." });
+  if (value.length < 8) return fail({ password: t("validation.passwordMin", { default: "Password must be at least 8 characters." }) });
   return ok(value);
 }
 
@@ -56,12 +57,12 @@ export function validateLocation(location) {
 
 export function validatePhone(phone) {
   const value = String(phone ?? "").trim();
-  if (!value) return fail({ phone: "Phone number is required." });
-  if (value.length > 30) return fail({ phone: "Phone number is too long." });
+  if (!value) return fail({ phone: t("validation.phoneRequired", { default: "Phone number is required." }) });
+  if (value.length > 30) return fail({ phone: t("validation.phoneTooLong", { default: "Phone number is too long." }) });
   // Allow digits, spaces, and common separators (+ - ( ) .). Require at least 7 digits.
-  if (!/^[+()\-.\s\d]+$/.test(value)) return fail({ phone: "Enter a valid phone number." });
+  if (!/^[+()\-.\s\d]+$/.test(value)) return fail({ phone: t("validation.phoneInvalid", { default: "Enter a valid phone number." }) });
   const digits = value.replace(/\D/g, "");
-  if (digits.length < 7) return fail({ phone: "Enter a valid phone number." });
+  if (digits.length < 7) return fail({ phone: t("validation.phoneInvalid", { default: "Enter a valid phone number." }) });
   return ok(value);
 }
 
@@ -123,15 +124,28 @@ export function validateSignup(input) {
 export function validateLogin(input) {
   const fieldErrors = {};
 
-  const emailR = validateEmail(input?.email);
-  if (!emailR.ok) Object.assign(fieldErrors, emailR.fieldErrors);
-
+  const identifier = String(input?.email ?? "").trim();
   const pass = String(input?.password ?? "");
-  if (!pass) fieldErrors.password = "Enter your password.";
+  if (!pass) fieldErrors.password = t("validation.passwordRequired", { default: "Enter your password." });
+
+  if (!identifier) {
+    fieldErrors.email = t("validation.emailOrPhoneRequired", { default: "Enter your email or phone number." });
+  } else if (identifier.includes("@")) {
+    const emailR = validateEmail(identifier);
+    if (!emailR.ok) Object.assign(fieldErrors, emailR.fieldErrors);
+  } else {
+    const digits = identifier.replace(/\D/g, "");
+    if (digits.length < 7) fieldErrors.email = t("validation.emailOrPhoneInvalid", { default: "Enter a valid email or phone number." });
+  }
 
   if (Object.keys(fieldErrors).length) return fail(fieldErrors);
 
-  return ok({ email: emailR.value, password: pass });
+  const isPhoneLogin = !identifier.includes("@");
+  return ok({
+    email: isPhoneLogin ? identifier : validateEmail(identifier).value,
+    password: pass,
+    isPhoneLogin,
+  });
 }
 
 export function validateMarketplaceFilters(params) {
@@ -176,21 +190,12 @@ export function validateInquiry(input) {
   const fieldErrors = {};
 
   const body = String(input?.body ?? "").trim();
-  if (body.length < 10) fieldErrors.body = "Message must be at least 10 characters.";
-  if (body.length > 1000) fieldErrors.body = "Message is too long.";
-
-  const name = String(input?.name ?? "").trim();
-  if (name.length < 2) fieldErrors.name = "Name must be at least 2 characters.";
-
-  const emailR = validateEmail(input?.email);
-  if (!emailR.ok) Object.assign(fieldErrors, emailR.fieldErrors);
-
-  const phone = String(input?.phone ?? "").trim();
-  if (phone && phone.length > 30) fieldErrors.phone = "Phone is too long.";
+  if (body.length < 10) fieldErrors.body = t("validation.inquiryMin", { default: "Message must be at least 10 characters." });
+  if (body.length > 1000) fieldErrors.body = t("validation.inquiryMax", { default: "Message is too long." });
 
   if (Object.keys(fieldErrors).length) return fail(fieldErrors);
 
-  return ok({ body, name, email: emailR.value, phone: phone || undefined });
+  return ok({ body });
 }
 
 export function validateProfileUpdate(input) {

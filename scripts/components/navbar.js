@@ -2,6 +2,7 @@ import { APP } from "../app/config.js";
 import { on } from "../app/events.js";
 import { logout, getCurrentUser } from "../app/auth-state.js";
 import { getTheme, toggleTheme } from "../app/theme.js";
+import { t, getCurrentLang, toggleLanguage, onLanguageChange } from "../app/i18n.js";
 import {
   getNotificationsForUser,
   getUnreadCount,
@@ -22,34 +23,39 @@ function roleBadgeClass(role) {
 }
 
 function roleBadgeLabel(role) {
-  const map = { farmer: "Farmer", business: "Business", admin: "Admin" };
-  return map[role] ?? "Guest";
+  const map = {
+    farmer: t("nav.role.farmer"),
+    business: t("nav.role.business"),
+    admin: t("nav.role.admin"),
+  };
+  return map[role] ?? t("nav.role.guest");
 }
 
 function roleLinks(role) {
   switch (role) {
     case "farmer":
       return `
-        <a href="/pages/marketplace.html">Marketplace</a>
-        <a href="/pages/for-farmers.html">Farmer Tools</a>
-        <a href="/pages/add-listing.html">Add Listing</a>
+        <a href="/pages/farmer-dashboard.html">${t("nav.link.dashboard")}</a>
+        <a href="/pages/marketplace.html">${t("nav.link.marketplace")}</a>
+        <a href="/pages/for-farmers.html">${t("nav.link.farmerTools")}</a>
+        <a href="/pages/add-listing.html">${t("nav.link.addListing")}</a>
       `;
     case "business":
       return `
-        <a href="/pages/marketplace.html">Marketplace</a>
-        <a href="/pages/for-businesses.html">Business Sourcing</a>
+        <a href="/pages/marketplace.html">${t("nav.link.marketplace")}</a>
+        <a href="/pages/for-businesses.html">${t("nav.link.businessSourcing")}</a>
       `;
     case "admin":
       return `
-        <a href="/pages/marketplace.html">Marketplace</a>
-        <a href="/pages/admin-panel.html">Admin Panel</a>
-        <a href="/pages/add-listing.html">Add Listing</a>
+        <a href="/pages/marketplace.html">${t("nav.link.marketplace")}</a>
+        <a href="/pages/admin-panel.html">${t("nav.link.adminPanel")}</a>
+        <a href="/pages/add-listing.html">${t("nav.link.addListing")}</a>
       `;
     default:
       return `
-        <a href="/pages/marketplace.html">Browse</a>
-        <a href="/pages/for-farmers.html">For Farmers</a>
-        <a href="/pages/for-businesses.html">For Businesses</a>
+        <a href="/pages/marketplace.html">${t("nav.link.browse")}</a>
+        <a href="/pages/for-farmers.html">${t("nav.link.forFarmers")}</a>
+        <a href="/pages/for-businesses.html">${t("nav.link.forBusinesses")}</a>
       `;
   }
 }
@@ -72,11 +78,11 @@ function esc(str) {
 function timeAgo(ts) {
   const diff = Date.now() - ts;
   const m = Math.floor(diff / 60000);
-  if (m < 1)  return "just now";
-  if (m < 60) return `${m}m ago`;
+  if (m < 1) return t("common.justNow");
+  if (m < 60) return t("common.minutesAgo", { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
+  if (h < 24) return t("common.hoursAgo", { n: h });
+  return t("common.daysAgo", { n: Math.floor(h / 24) });
 }
 
 function themeToggleIcon(theme) {
@@ -96,14 +102,15 @@ function renderNav({ user } = {}) {
   const badgeClass   = roleBadgeClass(role);
   const badgeLabel   = roleBadgeLabel(role);
   const userInitials = isAuthed ? initials(user.name) : "";
+  const lang = getCurrentLang();
 
-  const bellHtml = isAuthed && user.role === "admin" ? `
+  const bellHtml = isAuthed ? `
     <div class="notif-bell-wrap" id="notif-bell-wrap">
       <button
         class="notif-bell-btn"
         type="button"
         id="notif-bell-btn"
-        aria-label="Notifications"
+        aria-label="${t("nav.notifications")}"
         aria-haspopup="true"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -113,13 +120,13 @@ function renderNav({ user } = {}) {
         </svg>
         <span class="notif-badge" id="notif-badge" style="display:none;">0</span>
       </button>
-      <div class="notif-dropdown" id="notif-dropdown" role="region" aria-label="Notifications">
+      <div class="notif-dropdown" id="notif-dropdown" role="region" aria-label="${t("nav.notifications")}">
         <div class="notif-dropdown-header">
-          <span class="notif-dropdown-title">Notifications</span>
-          <button class="notif-mark-all" type="button" id="notif-mark-all">Mark all read</button>
+          <span class="notif-dropdown-title">${t("nav.notifications")}</span>
+          <button class="notif-mark-all" type="button" id="notif-mark-all">${t("nav.markAllRead")}</button>
         </div>
         <div class="notif-list" id="notif-list">
-          <div class="notif-empty">You're all caught up!</div>
+          <div class="notif-empty">${t("nav.allCaughtUp")}</div>
         </div>
       </div>
     </div>
@@ -138,7 +145,7 @@ function renderNav({ user } = {}) {
         <!-- Nav links (hidden on mobile) -->
         <nav class="nav-links" aria-label="Primary navigation">
           ${roleLinks(role)}
-          <span class="nav-role-badge ${badgeClass}" aria-label="Viewing as ${badgeLabel}">
+          <span class="nav-role-badge ${badgeClass}" aria-label="${t("nav.viewingAs", { role: badgeLabel })}">
             ${badgeLabel}
           </span>
         </nav>
@@ -146,27 +153,39 @@ function renderNav({ user } = {}) {
         <!-- Actions -->
         <div class="nav-actions">
           <button
+            class="btn btn-ghost btn-sm"
+            type="button"
+            data-action="lang-toggle"
+            aria-label="${lang === "en" ? "Switch to Georgian" : "Switch to English"}"
+          >${lang === "en" ? "🇬🇧 English" : "🇬🇪 Georgian"}</button>
+          <button
             class="theme-toggle"
             type="button"
             data-action="theme-toggle"
-            aria-label="Toggle ${theme === "dark" ? "light" : "dark"} mode"
-            title="Switch to ${theme === "dark" ? "light" : "dark"} mode"
+            aria-label="${theme === "dark" ? t("nav.toggleThemeLight") : t("nav.toggleThemeDark")}"
+            title="${theme === "dark" ? t("nav.switchToLight") : t("nav.switchToDark")}"
           >
             ${themeToggleIcon(theme)}
           </button>
+          ${isAuthed ? `<a class="nav-messages-link" href="/pages/messages.html" aria-label="${t("nav.messages")}" title="${t("nav.messages")}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+          </a>` : ""}
           ${bellHtml}
           ${isAuthed ? `
-            <a class="nav-user" href="../../pages/account.html" aria-label="Open account page">
+            <a class="nav-user" href="../../pages/account.html" aria-label="${t("nav.openAccount")}">
                 <span class="nav-avatar" aria-hidden="true">
                 ${userInitials}
                 </span>
 
                  ${esc(user.name)}
             </a>
-            <button class="btn btn-ghost" type="button" data-action="logout">Log out</button>
+            <button class="btn btn-ghost" type="button" data-action="logout">${t("common.logout")}</button>
           ` : `
-            <a class="btn btn-ghost" href="/pages/login.html">Log in</a>
-            <a class="btn btn-primary" href="/pages/signup.html">Sign up</a>
+            <a class="btn btn-ghost" href="/pages/login.html">${t("common.login")}</a>
+            <a class="btn btn-primary" href="/pages/signup.html">${t("common.signUp")}</a>
           `}
         </div>
 
@@ -183,11 +202,13 @@ export function mountNavbar(targetEl) {
   // Track subscriptions to clean up on each re-render
   let _unsubNotif    = null;
   let _docClickOff   = null;
+  let _docKeydownOff = null;
 
   function render(payload) {
     // Clean up previous dynamic subscriptions before re-rendering
     if (_unsubNotif)  { _unsubNotif();  _unsubNotif  = null; }
     if (_docClickOff) { _docClickOff(); _docClickOff = null; }
+    if (_docKeydownOff) { _docKeydownOff(); _docKeydownOff = null; }
 
     targetEl.innerHTML = renderNav(payload);
 
@@ -207,6 +228,13 @@ export function mountNavbar(targetEl) {
       themeBtn.addEventListener("click", () => {
         toggleTheme();
         render(payload);
+      });
+    }
+
+    const langBtn = targetEl.querySelector("[data-action='lang-toggle']");
+    if (langBtn) {
+      langBtn.addEventListener("click", () => {
+        toggleLanguage();
       });
     }
 
@@ -238,7 +266,7 @@ export function mountNavbar(targetEl) {
       getNotificationsForUser(userId, { limit: 12 }).then((res) => {
         const items = res.ok ? res.data : [];
         if (!items.length) {
-          notifList.innerHTML = `<div class="notif-empty">You're all caught up!</div>`;
+          notifList.innerHTML = `<div class="notif-empty">${t("nav.allCaughtUp")}</div>`;
           return;
         }
         notifList.innerHTML = items.map((n) => `
@@ -252,11 +280,22 @@ export function mountNavbar(targetEl) {
       `).join("");
 
         notifList.querySelectorAll("[data-notif-id]").forEach((item) => {
+          const id = item.dataset.notifId;
+          const found = items.find((n) => String(n.id) === id);
+          const isMessage = found?.type === "message";
           const markRead = () => {
-            markNotificationRead(item.dataset.notifId, userId);
+            markNotificationRead(id, userId);
             item.classList.remove("unread");
             item.querySelector(".notif-item-dot")?.classList.add("read");
             updateBadge();
+            if (isMessage) {
+              const fromUserId = found?.metadata?.fromUserId;
+              const listingId = found?.metadata?.listingId;
+              const qp = new URLSearchParams();
+              if (fromUserId) qp.set("user", fromUserId);
+              if (listingId) qp.set("listing", listingId);
+              location.href = `/pages/messages.html${qp.toString() ? `?${qp}` : ""}`;
+            }
           };
           item.addEventListener("click", markRead);
           item.addEventListener("keydown", (e) => { if (e.key === "Enter") markRead(); });
@@ -288,13 +327,15 @@ export function mountNavbar(targetEl) {
     _docClickOff = () => document.removeEventListener("click", docClickHandler);
 
     // Close on Escape
-    document.addEventListener("keydown", (e) => {
+    const keydownHandler = (e) => {
       if (e.key === "Escape" && bellWrap?.classList.contains("open")) {
         bellWrap.classList.remove("open");
         bellBtn.setAttribute("aria-expanded", "false");
         bellBtn.focus();
       }
-    });
+    };
+    document.addEventListener("keydown", keydownHandler);
+    _docKeydownOff = () => document.removeEventListener("keydown", keydownHandler);
 
     // Mark all read
     if (markAllBtn) {
@@ -310,22 +351,32 @@ export function mountNavbar(targetEl) {
     primeNotificationCache(userId).then(updateBadge);
 
     // Subscribe to notification changes to update badge live
-    _unsubNotif = on("notifications:changed", ({ userId: changedFor }) => {
-      if (changedFor === userId) {
+    const refreshBadge = ({ userId: changedFor }) => {
+      if (changedFor !== userId) return;
+      // Force a fresh read so the cached unread count is recomputed.
+      primeNotificationCache(userId).then(() => {
         updateBadge();
         if (bellWrap?.classList.contains("open")) renderNotifItems();
-      }
-    });
+      });
+    };
+    const offNotif = on("notifications:changed", refreshBadge);
+    const offMsg = on("messages:changed", refreshBadge);
+    _unsubNotif = () => { offNotif(); offMsg(); };
 
     updateBadge();
   }
 
   render({ user: null });
   const unsubAuth = on("auth:changed", render);
+  const unsubLang = onLanguageChange(() => {
+    render({ user: getCurrentUser() });
+  });
 
   return () => {
     if (_unsubNotif)  _unsubNotif();
     if (_docClickOff) _docClickOff();
+    if (_docKeydownOff) _docKeydownOff();
     unsubAuth();
+    unsubLang();
   };
 }
