@@ -17,6 +17,7 @@ export function getSupabase() {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
+        detectSessionInUrl: true,
         storageKey: SUPABASE_SESSION_KEY,
       },
     });

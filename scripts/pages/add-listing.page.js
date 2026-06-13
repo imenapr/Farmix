@@ -118,8 +118,8 @@ function mountPage() {
             <input class="input" id="images" name="images" type="file" accept="image/*" multiple />
             <span class="muted" style="font-size: var(--text-sm);">${t("listingForm.imagesHint")}</span>
             <span class="form-error" data-err="images"></span>
-          </div>
 
+            
           <p class="form-error-banner" id="form-error" role="alert" style="display: none;"></p>
 
           <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; margin-top: 1.5rem;">
@@ -139,7 +139,7 @@ function mountPage() {
 function wireForm(form) {
   const submitBtn = qs(root, "[data-submit]");
   const formError = qs(root, "#form-error");
-  const fieldKeys = ["title", "categoryId", "price", "unit", "quantityAvailable", "location", "description", "images"];
+  const fieldKeys = ["title", "categoryId", "price", "unit", "quantityAvailable", "location", "description", "images", "imageUrls"];
 
   function clearErrors() {
     formError.style.display = "none";
@@ -186,6 +186,15 @@ function wireForm(form) {
           );
         }
         images = await Promise.all(readers);
+      }
+
+      const imageUrlsText = fd.get("imageUrls") || "";
+      if (String(imageUrlsText).trim()) {
+        const urls = String(imageUrlsText)
+          .split(",")
+          .map((u) => u.trim())
+          .filter((u) => u && u.startsWith("http"));
+        images = [...images, ...urls].slice(0, 8);
       }
 
       if (images.length === 0) images = ["/img/logo.png"];

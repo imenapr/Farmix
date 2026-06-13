@@ -2,7 +2,7 @@ import { STORAGE_KEYS } from "../app/config.js";
 import { emit } from "../app/events.js";
 import { getSupabase } from "../lib/supabase.js";
 import { userFromDb } from "../lib/transform.js";
-import { validateLogin, validateSignup } from "../data/validators.js";
+import { validateLogin, validateSignup, validateForgotPassword, validateResetPassword } from "../data/validators.js";
 import { createNotification } from "./notifications.service.js";
 import { findEmailByPhone } from "./users.service.js";
 import { ROLES } from "../app/config.js";
@@ -167,6 +167,22 @@ export async function signup(input) {
 
   if (signError) {
     if (signError.message?.toLowerCase().includes("already registered")) {
+      const { data: existingProfile } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", email)
+        .maybeSingle();
+
+      if (!existingProfile) {
+        return err(
+          "CONFLICT",
+          t("service.emailAuthOrphan", {
+            default:
+              "This email still has an auth account, but the profile was deleted. Try logging in instead — your profile will be recreated. To sign up fresh, delete the user under Supabase Authentication → Users.",
+          }),
+        );
+      }
+
       return err("CONFLICT", t("service.emailExists", { default: "An account with this email already exists." }));
     }
     return err("AUTH_ERROR", signError.message);
@@ -254,6 +270,86 @@ export async function login(input) {
 
   setCurrentUserInternal(profile);
   return ok({ user: profile });
+}
+
+function passwordResetRedirectUrl() {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/pages/reset-password.html`;
+  }
+  return undefined;
+}
+
+export async function requestPasswordReset(input) {
+  const v = validateForgotPassword(input);
+  if (!v.ok) {
+    return err(
+      "VALIDATION_FAILED",
+      t("service.fixHighlighted", { default: "Fix the highlighted fields." }),
+      v.fieldErrors,
+    );
+  }
+
+  const supabase = getSupabase();
+  const { error } = await supabase.auth.resetPasswordForEmail(v.value, {
+    redirectTo: passwordResetRedirectUrl(),
+  });
+
+  if (error) {
+    return err("AUTH_ERROR", error.message || t("auth.forgot.failed"));
+  }
+
+  return ok(null);
+}
+
+export async function completePasswordReset(input) {
+  const v = validateResetPassword(input);
+  if (!v.ok) {
+    return err(
+      "VALIDATION_FAILED",
+      t("service.fixHighlighted", { default: "Fix the highlighted fields." }),
+      v.fieldErrors,
+    );
+  }
+
+  const supabase = getSupabase();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    return err("AUTH_REQUIRED", t("auth.reset.invalidLink"));
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: v.value });
+  if (error) {
+    return err("AUTH_ERROR", error.message || t("auth.reset.failed"));
+  }
+
+  return ok(null);
+}
+
+export async function waitForRecoverySession(timeoutMs = 4000) {
+  const supabase = getSupabase();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) return ok({ ready: true });
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      subscription.unsubscribe();
+      clearTimeout(timer);
+      resolve(result);
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if ((event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") && nextSession) {
+        finish(ok({ ready: true }));
+      }
+    });
+
+    const timer = setTimeout(() => {
+      finish(err("AUTH_REQUIRED", t("auth.reset.invalidLink")));
+    }, timeoutMs);
+  });
 }
 
 export function requireAuth() {

@@ -81,6 +81,22 @@
   line-height: 1.55;
 }
 
+.auth-forgot {
+  margin: -0.35rem 0 1rem;
+  text-align: right;
+  font-size: var(--text-sm);
+}
+
+.auth-forgot a {
+  color: var(--color-primary-700);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.auth-forgot a:hover {
+  text-decoration: underline;
+}
+
 /* ─── Form fields ────────────────────────────────────────────────── */
 .form-field {
   display: grid;

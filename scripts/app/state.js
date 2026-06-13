@@ -11,6 +11,9 @@ import {
   signup as authSignup,
   logout as authLogout,
   refreshCurrentUser as authRefresh,
+  requestPasswordReset as authRequestPasswordReset,
+  completePasswordReset as authCompletePasswordReset,
+  waitForRecoverySession as authWaitForRecoverySession,
   watchSession,
 } from "../services/auth.service.js";
 import { getListingById as getListingByIdSvc, getUserListings as getUserListingsSvc, searchListings as searchListingsSvc } from "../services/listings.service.js";
@@ -56,6 +59,18 @@ export async function signup(input) {
 
 export async function logout() {
   return authLogout();
+}
+
+export async function requestPasswordReset(input) {
+  return authRequestPasswordReset(input);
+}
+
+export async function completePasswordReset(input) {
+  return authCompletePasswordReset(input);
+}
+
+export async function waitForRecoverySession(timeoutMs) {
+  return authWaitForRecoverySession(timeoutMs);
 }
 
 export function getCurrentUser() {

@@ -42,6 +42,10 @@ function render() {
             <span class="form-error" data-err="password"></span>
           </div>
 
+          <p class="auth-forgot">
+            <a href="/pages/forgot-password.html">${t("auth.login.forgotPassword")}</a>
+          </p>
+
           <button class="btn btn-primary btn-full" type="submit" data-submit>${t("auth.login.button")}</button>
         </form>
 
