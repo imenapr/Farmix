@@ -153,11 +153,21 @@ function renderNav({ user } = {}) {
         <!-- Actions -->
         <div class="nav-actions">
           <button
-            class="btn btn-ghost btn-sm"
+            class="lang-toggle"
             type="button"
             data-action="lang-toggle"
-            aria-label="${lang === "en" ? "Switch to Georgian" : "Switch to English"}"
-          >${lang === "en" ? "🇬🇧 English" : "🇬🇪 Georgian"}</button>
+            aria-label="${lang === "en" ? t("nav.switchToGeorgian") : t("nav.switchToEnglish")}"
+            title="${lang === "en" ? t("lang.english") : t("lang.georgian")}"
+          >
+            <img
+              class="lang-toggle-flag"
+              src="${lang === "en" ? "/img/ENG.png" : "/img/GEO.png"}"
+              alt=""
+              aria-hidden="true"
+              width="22"
+              height="22"
+            />
+          </button>
           <button
             class="theme-toggle"
             type="button"

@@ -62,6 +62,8 @@ export const translations = {
     "nav.toggleThemeDark": "Toggle dark mode",
     "nav.switchToLight": "Switch to light mode",
     "nav.switchToDark": "Switch to dark mode",
+    "nav.switchToGeorgian": "Switch to Georgian",
+    "nav.switchToEnglish": "Switch to English",
     "nav.viewingAs": "Viewing as {role}",
 
     "listing.uncategorized": "Uncategorized",
@@ -475,6 +477,8 @@ export const translations = {
     "nav.toggleThemeDark": "ბნელ რეჟიმზე გადართვა",
     "nav.switchToLight": "ღია რეჟიმზე გადასვლა",
     "nav.switchToDark": "ბნელ რეჟიმზე გადასვლა",
+    "nav.switchToGeorgian": "ქართულზე გადართვა",
+    "nav.switchToEnglish": "ინგლისურზე გადართვა",
     "nav.viewingAs": "როლი: {role}",
 
     "listing.uncategorized": "უკატეგორიო",
