@@ -65,7 +65,8 @@
   transition: opacity 180ms ease-out, transform 180ms cubic-bezier(0.2,0.8,0.2,1);
   pointer-events: none;
 }
-.listing-card:hover .listing-order-wrap {
+.listing-card:hover .listing-order-wrap,
+.listing-card:focus-within .listing-order-wrap {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
@@ -198,6 +199,18 @@
   margin-top: 1.25rem;
 }
 .order-modal-actions .btn { flex: 1; }
+
+@media (hover: none), (pointer: coarse) {
+  .listing-card {
+    padding-bottom: 3.4rem;
+  }
+
+  .listing-order-wrap {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+}
 
 @media (min-width: 920px) {
   .market-layout {
