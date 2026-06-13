@@ -35,9 +35,8 @@ function roleLinks(role) {
   switch (role) {
     case "farmer":
       return `
-        <a href="/pages/farmer-dashboard.html">${t("nav.link.dashboard")}</a>
+        <a href="/pages/farmer-dashboard.html">${t("nav.link.farmerTools")}</a>
         <a href="/pages/marketplace.html">${t("nav.link.marketplace")}</a>
-        <a href="/pages/for-farmers.html">${t("nav.link.farmerTools")}</a>
         <a href="/pages/add-listing.html">${t("nav.link.addListing")}</a>
       `;
     case "business":
