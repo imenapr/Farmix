@@ -194,8 +194,9 @@ export function mountNavbar(targetEl) {
     // ── Logout ────────────────────────────────────────────────────────
     const logoutBtn = targetEl.querySelector("[data-action='logout']");
     if (logoutBtn) {
-      logoutBtn.addEventListener("click", () => {
-        logout();
+      logoutBtn.addEventListener("click", async () => {
+        logoutBtn.disabled = true;
+        await logout();
         location.href = "/index.html";
       });
     }

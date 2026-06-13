@@ -1,6 +1,6 @@
 import { boot } from "../app/boot.js";
-import { initAppState, logout, getCurrentUser } from "../app/auth-state.js";
-import { ROLES } from "../app/config.js";
+import { logout } from "../app/auth-state.js";
+import { guardAdmin } from "../app/router-guards.js";
 import { escapeHtml } from "../app/ui.js";
 import {
   getSystemStats,
@@ -63,20 +63,18 @@ if (themeToggle) {
 
 if (logoutBtn) {
   logoutBtn.addEventListener("click", async () => {
-    sessionStorage.removeItem("farmix.admin.verified");
     await logout();
-    location.href = "/pages/admin-login.html";
+    location.href = "/index.html";
   });
 }
 
 async function ensureAdmin() {
-  await initAppState();
-  const verified = sessionStorage.getItem("farmix.admin.verified");
-  const user = getCurrentUser();
-  if (!verified || !user || user.role !== ROLES.admin) {
-    location.replace("/pages/admin-login.html");
-    return null;
-  }
+  // Authoritative, Supabase-backed role check via the shared guard:
+  //   not logged in        -> redirected to login (with ?next)
+  //   logged in, not admin -> redirected to home
+  //   admin                -> allowed through
+  const user = await guardAdmin();
+  if (!user) return null;
   if (userName) userName.textContent = `${user.name} · Administrator`;
   return user;
 }

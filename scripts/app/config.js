@@ -3,10 +3,6 @@ export const APP = {
   slogan: "Where Farms Meet Market",
 };
 
-// Admin gate — checked client-side as a second factor in addition to admin role.
-// Change this before deploying to anything sensitive.
-export const ADMIN_ACCESS_KEY = "FARMIX-ADMIN-2024";
-
 /** UI-only localStorage keys (never authoritative for business data). */
 export const STORAGE_KEYS = {
   authCache: "farmix.auth.cache",

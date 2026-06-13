@@ -54,6 +54,17 @@ export function validateLocation(location) {
   return ok(value);
 }
 
+export function validatePhone(phone) {
+  const value = String(phone ?? "").trim();
+  if (!value) return fail({ phone: "Phone number is required." });
+  if (value.length > 30) return fail({ phone: "Phone number is too long." });
+  // Allow digits, spaces, and common separators (+ - ( ) .). Require at least 7 digits.
+  if (!/^[+()\-.\s\d]+$/.test(value)) return fail({ phone: "Enter a valid phone number." });
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 7) return fail({ phone: "Enter a valid phone number." });
+  return ok(value);
+}
+
 export function validateSignup(input) {
   const fieldErrors = {};
 
@@ -71,6 +82,9 @@ export function validateSignup(input) {
 
   const locR = validateLocation(input?.location);
   if (!locR.ok) Object.assign(fieldErrors, locR.fieldErrors);
+
+  const phoneR = validatePhone(input?.phone);
+  if (!phoneR.ok) Object.assign(fieldErrors, phoneR.fieldErrors);
 
   const farmName = String(input?.farmName ?? "").trim();
   const companyName = String(input?.companyName ?? "").trim();
@@ -100,6 +114,7 @@ export function validateSignup(input) {
     role: roleR.value,
     name: nameR.value,
     location: locR.value,
+    phone: phoneR.value,
     farmName: farmName || undefined,
     companyName: companyName || undefined,
   });

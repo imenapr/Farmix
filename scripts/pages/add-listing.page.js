@@ -1,6 +1,6 @@
 import { boot } from "../app/boot.js";
 import { qs, setText, toast } from "../app/ui.js";
-import { getCurrentUser } from "../app/auth-state.js";
+import { initAppState, getCurrentUser } from "../app/auth-state.js";
 import { createListing } from "../services/listings.service.js";
 import { CATEGORIES } from "../data/seed.js";
 
@@ -9,7 +9,11 @@ boot();
 const root = document.getElementById("add-listing-root");
 if (!root) throw new Error("Missing #add-listing-root");
 
-// Check authentication
+// Auth state is restored asynchronously from Supabase. Wait for it before
+// reading the current user, otherwise this runs before the session is hydrated
+// and would wrongly report the user as logged out.
+await initAppState();
+
 const user = getCurrentUser();
 if (!user) {
   root.innerHTML = `

@@ -9,5 +9,6 @@ export {
   signup,
   logout,
   getCurrentUser,
+  refreshCurrentUser,
   initAppState,
 } from "./state.js";

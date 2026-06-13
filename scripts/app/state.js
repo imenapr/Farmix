@@ -10,6 +10,7 @@ import {
   login as authLogin,
   signup as authSignup,
   logout as authLogout,
+  refreshCurrentUser as authRefresh,
   watchSession,
 } from "../services/auth.service.js";
 import { getListingById as getListingByIdSvc, getUserListings as getUserListingsSvc, searchListings as searchListingsSvc } from "../services/listings.service.js";
@@ -59,6 +60,11 @@ export async function logout() {
 
 export function getCurrentUser() {
   return getAuthUser();
+}
+
+/** Force a fresh Supabase role/profile fetch, bypassing the TTL cache. */
+export async function refreshCurrentUser() {
+  return authRefresh();
 }
 
 export async function searchListings(filters) {

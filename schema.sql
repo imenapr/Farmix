@@ -143,6 +143,33 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.favorites ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================================
+-- ADMIN HELPER (SECURITY DEFINER)
+-- ----------------------------------------------------------------------------
+-- Authoritative server-side admin check. Runs as the function owner, so it
+-- BYPASSES RLS on public.users and therefore avoids the infinite-recursion
+-- that occurs when a policy ON public.users sub-selects FROM public.users.
+-- Role can never be spoofed from the client: this reads the DB row directly.
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.is_admin(uid uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.users
+    WHERE id = uid
+      AND role = 'admin'
+      AND suspended = false
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.is_admin(uuid) FROM public;
+GRANT EXECUTE ON FUNCTION public.is_admin(uuid) TO authenticated, anon;
+
+-- ============================================================================
 -- USERS TABLE - RLS POLICIES
 -- ============================================================================
 
@@ -166,7 +193,7 @@ CREATE POLICY "Users can update own profile" ON public.users
 -- Policy: Admins can view all user data and update any user
 CREATE POLICY "Admins can manage users" ON public.users
   FOR ALL USING (
-    auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin' AND suspended = false)
+    public.is_admin(auth.uid())
   );
 
 -- ============================================================================
@@ -177,7 +204,7 @@ CREATE POLICY "Admins can manage users" ON public.users
 CREATE POLICY "Anyone can view active listings" ON public.listings
   FOR SELECT USING (status = 'active' OR
     (seller_id = auth.uid()) OR
-    (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin' AND suspended = false))
+    (public.is_admin(auth.uid()))
   );
 
 -- Policy: Logged-in users can create listings
@@ -190,16 +217,16 @@ CREATE POLICY "Logged-in users can create listings" ON public.listings
 -- Policy: Users can update only their own listings
 CREATE POLICY "Users can update own listings" ON public.listings
   FOR UPDATE USING (auth.uid() = seller_id OR
-    (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin' AND suspended = false))
+    (public.is_admin(auth.uid()))
   )
   WITH CHECK (auth.uid() = seller_id OR
-    (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin' AND suspended = false))
+    (public.is_admin(auth.uid()))
   );
 
 -- Policy: Users can delete only their own listings
 CREATE POLICY "Users can delete own listings" ON public.listings
   FOR DELETE USING (auth.uid() = seller_id OR
-    (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin' AND suspended = false))
+    (public.is_admin(auth.uid()))
   );
 
 -- ============================================================================
@@ -211,7 +238,7 @@ CREATE POLICY "Users can view relevant orders" ON public.orders
   FOR SELECT USING (
     auth.uid() = buyer_id OR
     auth.uid() = seller_id OR
-    (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin' AND suspended = false))
+    (public.is_admin(auth.uid()))
   );
 
 -- Policy: Logged-in users can create orders
@@ -225,11 +252,11 @@ CREATE POLICY "Logged-in users can create orders" ON public.orders
 CREATE POLICY "Buyer or seller can update order" ON public.orders
   FOR UPDATE USING (
     (auth.uid() = buyer_id OR auth.uid() = seller_id) OR
-    (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin' AND suspended = false))
+    (public.is_admin(auth.uid()))
   )
   WITH CHECK (
     (auth.uid() = buyer_id OR auth.uid() = seller_id) OR
-    (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin' AND suspended = false))
+    (public.is_admin(auth.uid()))
   );
 
 -- ============================================================================
@@ -241,7 +268,7 @@ CREATE POLICY "Users can view own messages" ON public.messages
   FOR SELECT USING (
     auth.uid() = sender_id OR
     auth.uid() = recipient_id OR
-    (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin' AND suspended = false))
+    (public.is_admin(auth.uid()))
   );
 
 -- Policy: Logged-in users can send messages
@@ -270,7 +297,7 @@ CREATE POLICY "Users can update own messages" ON public.messages
 CREATE POLICY "Users can view own notifications" ON public.notifications
   FOR SELECT USING (
     auth.uid() = user_id OR
-    (auth.uid() IN (SELECT id FROM public.users WHERE role = 'admin' AND suspended = false))
+    (public.is_admin(auth.uid()))
   );
 
 -- Policy: System (service role) can create notifications
@@ -345,8 +372,28 @@ CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON public.orders
 --   ('550e8400-e29b-41d4-a716-446655440003'::uuid, 'consumer@farmix.local', 'Consumer User', '+1-555-0103', 'consumer', 'Tbilisi', now(), now());
 
 -- ============================================================================
+-- ADMIN SETUP (run manually — credentials are NEVER stored in the codebase)
+-- ----------------------------------------------------------------------------
+-- Step 1: Create the auth user with your real credentials, either via
+--         Supabase Dashboard → Authentication → Users → "Add user",
+--         or by signing up through the app normally.
+-- Step 2: Promote that user to admin by email (RLS is bypassed in SQL editor):
+--
+--   UPDATE public.users SET role = 'admin' WHERE email = 'REPLACE_WITH_ADMIN_EMAIL';
+--
+-- Step 3 (optional sanity check):
+--   SELECT id, email, role, suspended FROM public.users WHERE role = 'admin';
+-- ============================================================================
+
+-- ============================================================================
 -- MIGRATION (existing Supabase projects — run once if tables already exist)
 -- ============================================================================
+
+-- Recursion-safe admin function + policy refresh (run if upgrading an old DB):
+-- (Re-run the CREATE FUNCTION public.is_admin(...) block above, then)
+-- DROP POLICY IF EXISTS "Admins can manage users" ON public.users;
+-- CREATE POLICY "Admins can manage users" ON public.users
+--   FOR ALL USING (public.is_admin(auth.uid()));
 
 -- ALTER TABLE public.users ADD COLUMN IF NOT EXISTS bio text;
 -- ALTER TABLE public.users ADD COLUMN IF NOT EXISTS verified boolean NOT NULL DEFAULT false;

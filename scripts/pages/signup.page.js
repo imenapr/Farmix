@@ -85,6 +85,14 @@ root.innerHTML = `
           <span class="form-error" data-err="location"></span>
         </div>
 
+        <!-- ── Phone ── -->
+        <div class="form-field">
+          <label class="form-label" for="sf-phone">Phone number</label>
+          <input class="input" id="sf-phone" name="phone"
+                 type="tel" autocomplete="tel" inputmode="tel" placeholder="+1 555 123 4567" required />
+          <span class="form-error" data-err="phone"></span>
+        </div>
+
         <!-- ── Email ── -->
         <div class="form-field">
           <label class="form-label" for="sf-email">Email address</label>
@@ -155,7 +163,7 @@ const next = new URLSearchParams(location.search).get("next");
 if (next) loginLink.href = `/pages/login.html?next=${encodeURIComponent(next)}`;
 
 // ─── Error helpers ────────────────────────────────────────────────
-const FIELD_KEYS = ["name", "farmName", "companyName", "location", "email", "password", "role", "form"];
+const FIELD_KEYS = ["name", "farmName", "companyName", "location", "phone", "email", "password", "role", "form"];
 
 function clearErrors() {
   setText(banner, "");
@@ -182,6 +190,7 @@ form.addEventListener("submit", async (e) => {
     farmName    : fd.get("farmName"),
     companyName : fd.get("companyName"),
     location    : fd.get("location"),
+    phone       : fd.get("phone"),
     email       : fd.get("email"),
     password    : fd.get("password"),
     role        : fd.get("role"),

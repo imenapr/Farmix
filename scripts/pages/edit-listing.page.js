@@ -1,6 +1,6 @@
 import { boot } from "../app/boot.js";
 import { qs, setText, toast } from "../app/ui.js";
-import { getCurrentUser } from "../app/auth-state.js";
+import { initAppState, getCurrentUser } from "../app/auth-state.js";
 import { getListingById, updateListing } from "../services/listings.service.js";
 import { CATEGORIES } from "../data/seed.js";
 
@@ -8,6 +8,9 @@ boot();
 
 const root = document.getElementById("edit-listing-root");
 if (!root) throw new Error("Missing #edit-listing-root");
+
+// Wait for Supabase session hydration before reading the current user.
+await initAppState();
 
 const user = getCurrentUser();
 if (!user) {

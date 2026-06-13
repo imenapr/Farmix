@@ -11,6 +11,15 @@ import { ROLES } from "../app/config.js";
 /** @type {ReturnType<typeof userFromDb>} */
 let currentUser = null;
 
+/**
+ * Profile (incl. role) cache TTL. The cache is a UI-performance optimization
+ * ONLY — it is never the authority for admin actions. Server-side RLS
+ * (public.is_admin) remains the source of truth, so a stale cached role
+ * cannot grant real privileges. Kept short so demotions/suspensions reflect
+ * quickly in the UI.
+ */
+const PROFILE_TTL_MS = 5 * 60 * 1000;
+
 function err(code, message, fieldErrors) {
   return { ok: false, error: { code, message, fieldErrors } };
 }
@@ -21,8 +30,14 @@ function ok(data) {
 
 function setAuthCache(user) {
   try {
-    if (!user) localStorage.removeItem(STORAGE_KEYS.authCache);
-    else localStorage.setItem(STORAGE_KEYS.authCache, JSON.stringify(user));
+    if (!user) {
+      localStorage.removeItem(STORAGE_KEYS.authCache);
+      return;
+    }
+    localStorage.setItem(
+      STORAGE_KEYS.authCache,
+      JSON.stringify({ user, fetchedAt: Date.now() })
+    );
   } catch {
     /* ignore quota errors */
   }
@@ -31,10 +46,23 @@ function setAuthCache(user) {
 function readAuthCache() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.authCache);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Back-compat: tolerate the older shape where the user was stored directly.
+    if (parsed && parsed.user) return parsed;
+    if (parsed && parsed.id) return { user: parsed, fetchedAt: 0 };
+    return null;
   } catch {
     return null;
   }
+}
+
+function isCacheFresh(entry, userId) {
+  return Boolean(
+    entry?.user?.id === userId &&
+    typeof entry.fetchedAt === "number" &&
+    Date.now() - entry.fetchedAt < PROFILE_TTL_MS
+  );
 }
 
 function setCurrentUserInternal(user) {
@@ -55,6 +83,28 @@ async function fetchUserProfile(userId) {
   return userFromDb(data);
 }
 
+/**
+ * Returns the cached profile for `userId` if still within the TTL, else null.
+ * Used to skip a Supabase round-trip on every page navigation.
+ */
+function getCachedProfile(userId) {
+  const entry = readAuthCache();
+  return isCacheFresh(entry, userId) ? entry.user : null;
+}
+
+/** Force-refresh the cached profile/role from Supabase (e.g. after a role change). */
+export async function refreshCurrentUser() {
+  const supabase = getSupabase();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    setCurrentUserInternal(null);
+    return null;
+  }
+  const profile = await fetchUserProfile(session.user.id);
+  setCurrentUserInternal(profile);
+  return profile;
+}
+
 async function upsertUserProfile(row) {
   const supabase = getSupabase();
   const { error } = await supabase.from("users").upsert(row, { onConflict: "id" });
@@ -67,28 +117,27 @@ export async function initAuthSession() {
 
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user?.id) {
-      const profile = await fetchUserProfile(session.user.id);
-      if (profile) {
-        setCurrentUserInternal(profile);
-        return;
-      }
-    }
-  } catch {
-    /* fall through */
-  }
-
-  // Non-authoritative cache for faster paint while session refreshes
-  const cached = readAuthCache();
-  if (cached?.id) {
-    const profile = await fetchUserProfile(cached.id);
-    if (profile) {
-      setCurrentUserInternal(profile);
+    if (!session?.user?.id) {
+      setCurrentUserInternal(null);
       return;
     }
-  }
 
-  setCurrentUserInternal(null);
+    // Role cache: skip the Supabase round-trip if we fetched this user's
+    // profile recently. RLS still guards every real admin operation, so a
+    // fresh cached role is safe to trust for UI purposes only.
+    const cachedProfile = getCachedProfile(session.user.id);
+    if (cachedProfile) {
+      currentUser = cachedProfile;
+      emit("auth:changed", { user: currentUser });
+      return;
+    }
+
+    const profile = await fetchUserProfile(session.user.id);
+    setCurrentUserInternal(profile);
+    return;
+  } catch {
+    setCurrentUserInternal(null);
+  }
 }
 
 export async function logout() {
@@ -102,7 +151,7 @@ export async function signup(input) {
   const v = validateSignup(input);
   if (!v.ok) return err("VALIDATION_FAILED", "Fix the highlighted fields.", v.fieldErrors);
 
-  const { email, password, role, name, location, farmName, companyName } = v.value;
+  const { email, password, role, name, location, phone, farmName, companyName } = v.value;
   if (![ROLES.farmer, ROLES.business, ROLES.consumer].includes(role)) {
     return err("VALIDATION_FAILED", "Select a valid role.");
   }
@@ -111,7 +160,7 @@ export async function signup(input) {
   const { data: signData, error: signError } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { name, role, location } },
+    options: { data: { name, role, location, phone } },
   });
 
   if (signError) {
@@ -131,6 +180,7 @@ export async function signup(input) {
     role,
     name,
     location,
+    phone: phone || null,
     farm_name: farmName || null,
     company_name: companyName || null,
     created_at: now,
