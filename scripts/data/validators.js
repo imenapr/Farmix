@@ -121,6 +121,58 @@ export function validateSignup(input) {
   });
 }
 
+export function validateForgotPassword(input) {
+  return validateEmail(input?.email);
+}
+
+export function validateResetPassword(input) {
+  const fieldErrors = {};
+  const passR = validatePassword(input?.password);
+  if (!passR.ok) Object.assign(fieldErrors, passR.fieldErrors);
+
+  const confirm = String(input?.confirmPassword ?? "");
+  if (!confirm) {
+    fieldErrors.confirmPassword = t("validation.confirmPasswordRequired", {
+      default: "Confirm your new password.",
+    });
+  } else if (passR.ok && confirm !== passR.value) {
+    fieldErrors.confirmPassword = t("validation.passwordMismatch", {
+      default: "Passwords do not match.",
+    });
+  }
+
+  if (Object.keys(fieldErrors).length) return fail(fieldErrors);
+  return ok({ password: passR.value });
+}
+
+function validateRatingValue(value, field) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 5) {
+    return fail({ [field]: t("validation.ratingRange", { default: "Choose a rating from 1 to 5." }) });
+  }
+  return ok(n);
+}
+
+export function validateReviewInput(input) {
+  const fieldErrors = {};
+  const listingId = String(input?.listingId ?? "").trim();
+  if (!listingId) fieldErrors.listingId = t("product.missingIdDesc");
+
+  const deliveryR = validateRatingValue(input?.deliveryRating, "deliveryRating");
+  if (!deliveryR.ok) Object.assign(fieldErrors, deliveryR.fieldErrors);
+
+  const qualityR = validateRatingValue(input?.qualityRating, "qualityRating");
+  if (!qualityR.ok) Object.assign(fieldErrors, qualityR.fieldErrors);
+
+  if (Object.keys(fieldErrors).length) return fail(fieldErrors);
+
+  return ok({
+    listingId,
+    deliveryRating: deliveryR.value,
+    qualityRating: qualityR.value,
+  });
+}
+
 export function validateLogin(input) {
   const fieldErrors = {};
 

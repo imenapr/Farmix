@@ -3,6 +3,7 @@ import { getCache, setCache, invalidateCache } from "../lib/cache.js";
 import { listingFromDb, listingToDb } from "../lib/transform.js";
 import { validateListingInput, validateMarketplaceFilters } from "../data/validators.js";
 import { emit } from "../app/events.js";
+import { getRatingsForListings } from "./reviews.service.js";
 
 const LISTINGS_CACHE_PREFIX = "listings:";
 const LISTING_TTL = 60_000;
@@ -33,6 +34,16 @@ async function attachSellerNames(listings) {
   }));
 }
 
+async function attachRatings(listings) {
+  if (!listings.length) return listings;
+  const res = await getRatingsForListings(listings.map((l) => l.id));
+  if (!res.ok) return listings;
+  return listings.map((l) => ({
+    ...l,
+    ratings: res.data[l.id] ?? undefined,
+  }));
+}
+
 export async function getListingById(listingId) {
   const cacheKey = `${LISTINGS_CACHE_PREFIX}id:${listingId}`;
   const cached = getCache(cacheKey);
@@ -44,6 +55,7 @@ export async function getListingById(listingId) {
 
   let listing = listingFromDb(data);
   [listing] = await attachSellerNames([listing]);
+  [listing] = await attachRatings([listing]);
   setCache(cacheKey, listing, LISTING_TTL);
   return ok(listing);
 }
@@ -88,6 +100,7 @@ export async function searchListings(filters = new URLSearchParams()) {
   if (error) return err("DB_ERROR", error.message);
 
   let items = (data ?? []).map(listingFromDb);
+  items = await attachRatings(items);
 
   switch (f.sort) {
     case "price_asc":
@@ -134,8 +147,9 @@ export async function getUserListings(userId) {
   if (error) return err("DB_ERROR", error.message);
 
   const items = (data ?? []).map(listingFromDb);
-  setCache(cacheKey, items, LISTING_TTL);
-  return ok(items);
+  const withRatings = await attachRatings(items);
+  setCache(cacheKey, withRatings, LISTING_TTL);
+  return ok(withRatings);
 }
 
 /** @deprecated alias */

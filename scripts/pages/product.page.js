@@ -3,6 +3,7 @@ import { getCurrentUser } from "../app/auth-state.js";
 import { getListingById } from "../app/state.js";
 import { escapeHtml, renderStateBlock, toast, qs, setText } from "../app/ui.js";
 import { incrementListingView, archiveListingAsOwnerOrAdmin } from "../services/listings.service.js";
+import { getUserReviewForListing, submitListingReview } from "../services/reviews.service.js";
 import { createInquiry } from "../services/messages.service.js";
 import { getUserById } from "../services/users.service.js";
 import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
@@ -20,6 +21,48 @@ function ratingText(value) {
   return value === null ? t("common.noRatings") : `${value}/5`;
 }
 
+function starsDisplay(value) {
+  const n = Math.max(0, Math.min(5, Number(value) || 0));
+  return `${"★".repeat(n)}${"☆".repeat(5 - n)}`;
+}
+
+function renderStarPicker(name, labelKey, selected = 0) {
+  return `
+    <div class="review-field">
+      <span class="review-label">${t(labelKey)}</span>
+      <div class="star-picker" data-star-picker="${name}">
+        ${[1, 2, 3, 4, 5]
+          .map(
+            (n) => `
+          <button type="button" class="star-picker-btn ${selected >= n ? "is-active" : ""}"
+                  data-star-value="${n}" aria-label="${n}">
+            ★
+          </button>
+        `,
+          )
+          .join("")}
+        <input type="hidden" name="${name}" value="${selected || ""}" />
+      </div>
+      <span class="form-error" data-err="${name}"></span>
+    </div>
+  `;
+}
+
+function wireStarPickers(scope) {
+  scope.querySelectorAll("[data-star-picker]").forEach((picker) => {
+    const hidden = picker.querySelector('input[type="hidden"]');
+    picker.querySelectorAll("[data-star-value]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const value = Number(btn.dataset.starValue);
+        hidden.value = String(value);
+        picker.querySelectorAll("[data-star-value]").forEach((starBtn) => {
+          starBtn.classList.toggle("is-active", Number(starBtn.dataset.starValue) <= value);
+        });
+      });
+    });
+  });
+}
+
 const root = document.getElementById("product-root");
 if (!root) throw new Error("Missing #product-root");
 
@@ -30,6 +73,7 @@ let phoneValue = null;
 let descExpanded = false;
 let viewsCounted = false;
 let inquiryDraft = "";
+let userReview = null;
 
 async function loadListing() {
   listingId = new URLSearchParams(location.search).get("id");
@@ -53,6 +97,13 @@ async function loadListing() {
   }
 
   listing = res.data;
+  const user = getCurrentUser();
+  userReview = null;
+  if (user && user.id !== listing.sellerId) {
+    const reviewRes = await getUserReviewForListing(listingId, user.id);
+    if (reviewRes.ok) userReview = reviewRes.data;
+  }
+
   if (!viewsCounted) {
     incrementListingView(listing.id);
     viewsCounted = true;
@@ -113,6 +164,31 @@ function renderPage() {
             <div class="rating-item"><span class="muted">${t("product.foodQuality")}</span><strong>${escapeHtml(ratingText(quality))}</strong></div>
             <div class="rating-item"><span class="muted">${t("product.overall")}</span><strong>${escapeHtml(ratingText(overall))}</strong></div>
           </div>
+
+          ${
+            user && !isOwner
+              ? userReview
+                ? `
+          <div class="review-your" style="margin-top:0.9rem;">
+            <div class="pill">${t("product.yourReview")}</div>
+            <div class="rating-grid" style="margin-top:0.55rem;">
+              <div class="rating-item"><span class="muted">${t("product.delivery")}</span><strong>${escapeHtml(starsDisplay(userReview.deliveryRating))}</strong></div>
+              <div class="rating-item"><span class="muted">${t("product.foodQuality")}</span><strong>${escapeHtml(starsDisplay(userReview.qualityRating))}</strong></div>
+            </div>
+          </div>`
+                : `
+          <section class="review-form-wrap" style="margin-top:0.9rem;">
+            <h2 style="margin:0 0 0.25rem; font-size:var(--text-lg); letter-spacing:-0.01em;">${t("product.rateProduct")}</h2>
+            <p class="muted" style="font-size:var(--text-sm); margin:0 0 0.75rem;">${t("product.rateProductDesc")}</p>
+            <form id="review-form" class="stack" novalidate>
+              ${renderStarPicker("deliveryRating", "product.delivery")}
+              ${renderStarPicker("qualityRating", "product.foodQuality")}
+              <p class="form-error-banner" id="review-error" role="alert" style="display:none;"></p>
+              <button class="btn btn-primary" type="submit" data-review-submit>${t("product.submitReview")}</button>
+            </form>
+          </section>`
+              : ""
+          }
 
           <div class="desc-wrap">
             <p class="product-desc is-collapsed" data-desc>${escapeHtml(listing.description || "")}</p>
@@ -268,6 +344,57 @@ function renderPage() {
       const phone = sellerRes.data.phone;
       phoneRevealed = true;
       phoneValue = phone || null;
+      renderPage();
+    });
+  }
+
+  const reviewForm = root.querySelector("#review-form");
+  if (reviewForm && user && !isOwner && !userReview) {
+    wireStarPickers(reviewForm);
+    const reviewSubmit = qs(reviewForm, "[data-review-submit]");
+    const reviewError = qs(reviewForm, "#review-error");
+
+    function clearReviewErrors() {
+      reviewError.style.display = "none";
+      reviewError.textContent = "";
+      for (const key of ["deliveryRating", "qualityRating"]) {
+        const el = reviewForm.querySelector(`[data-err='${key}']`);
+        if (el) el.textContent = "";
+      }
+    }
+
+    reviewForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearReviewErrors();
+      reviewSubmit.disabled = true;
+      reviewSubmit.textContent = t("product.submittingReview");
+
+      const fd = new FormData(reviewForm);
+      const res = await submitListingReview(
+        {
+          listingId,
+          deliveryRating: fd.get("deliveryRating"),
+          qualityRating: fd.get("qualityRating"),
+        },
+        user.id,
+      );
+
+      if (!res.ok) {
+        reviewSubmit.disabled = false;
+        reviewSubmit.textContent = t("product.submitReview");
+        for (const [key, msg] of Object.entries(res.error.fieldErrors ?? {})) {
+          const el = reviewForm.querySelector(`[data-err='${key}']`);
+          if (el) el.textContent = msg;
+        }
+        reviewError.textContent = res.error.message ?? t("product.reviewFailed");
+        reviewError.style.display = "block";
+        return;
+      }
+
+      toast("success", t("product.reviewSubmitted"));
+      userReview = res.data;
+      const refreshed = await getListingById(listingId);
+      if (refreshed.ok) listing = refreshed.data;
       renderPage();
     });
   }

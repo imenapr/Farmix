@@ -121,6 +121,55 @@
   text-decoration: underline;
 }
 
+.review-form-wrap {
+  border-top: 1px solid var(--color-border);
+  padding-top: 0.9rem;
+}
+
+.review-field {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.review-label {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.star-picker {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.star-picker-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--glass-bg-card);
+  color: var(--color-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+}
+
+.star-picker-btn.is-active {
+  color: var(--color-warning);
+  border-color: color-mix(in srgb, var(--color-warning) 45%, var(--color-border));
+}
+
+.star-picker-btn:hover {
+  transform: translateY(-1px);
+}
+
+.review-your .pill {
+  margin-bottom: 0.15rem;
+}
+
 @media (min-width: 920px) {
   .product-layout {
     grid-template-columns: 1.2fr 0.8fr;

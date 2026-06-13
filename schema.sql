@@ -116,6 +116,21 @@ CREATE TABLE IF NOT EXISTS public.favorites (
 );
 
 -- ============================================================================
+-- TABLE: listing_reviews (one review per user per listing)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.listing_reviews (
+  id uuid NOT NULL PRIMARY KEY DEFAULT uuid_generate_v4(),
+  listing_id uuid NOT NULL REFERENCES public.listings(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  delivery_rating smallint NOT NULL CHECK (delivery_rating BETWEEN 1 AND 5),
+  quality_rating smallint NOT NULL CHECK (quality_rating BETWEEN 1 AND 5),
+  created_at timestamp with time zone NOT NULL DEFAULT (now() at time zone 'utc'),
+  updated_at timestamp with time zone NOT NULL DEFAULT (now() at time zone 'utc'),
+  UNIQUE(listing_id, user_id)
+);
+
+-- ============================================================================
 -- INDEXES FOR PERFORMANCE
 -- ============================================================================
 
@@ -130,6 +145,8 @@ CREATE INDEX idx_messages_recipient_id ON public.messages(recipient_id);
 CREATE INDEX idx_notifications_user_id ON public.notifications(user_id);
 CREATE INDEX idx_notifications_read_at ON public.notifications(read_at);
 CREATE INDEX idx_favorites_user_id ON public.favorites(user_id);
+CREATE INDEX idx_listing_reviews_listing_id ON public.listing_reviews(listing_id);
+CREATE INDEX idx_listing_reviews_user_id ON public.listing_reviews(user_id);
 
 -- ============================================================================
 -- ROW-LEVEL SECURITY (RLS) - ENABLE ON ALL TABLES
@@ -141,6 +158,7 @@ ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.favorites ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.listing_reviews ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================================
 -- ADMIN HELPER (SECURITY DEFINER)
@@ -334,6 +352,27 @@ CREATE POLICY "Users can remove own favorites" ON public.favorites
   FOR DELETE USING (auth.uid() = user_id);
 
 -- ============================================================================
+-- LISTING_REVIEWS TABLE - RLS POLICIES
+-- ============================================================================
+
+-- Policy: Anyone can read reviews (for averages on marketplace/product pages)
+CREATE POLICY "Anyone can view listing reviews" ON public.listing_reviews
+  FOR SELECT USING (true);
+
+-- Policy: Logged-in users can submit one review per listing (not their own)
+CREATE POLICY "Users can submit listing reviews" ON public.listing_reviews
+  FOR INSERT WITH CHECK (
+    auth.uid() = user_id AND
+    auth.uid() IN (SELECT id FROM public.users WHERE suspended = false) AND
+    auth.uid() <> (SELECT seller_id FROM public.listings WHERE id = listing_id)
+  );
+
+-- Policy: Admins can manage all reviews
+CREATE POLICY "Admins manage listing reviews" ON public.listing_reviews
+  FOR ALL USING (public.is_admin(auth.uid()))
+  WITH CHECK (public.is_admin(auth.uid()));
+
+-- ============================================================================
 -- TRIGGERS - UPDATE UPDATED_AT TIMESTAMPS
 -- ============================================================================
 
@@ -352,6 +391,9 @@ CREATE TRIGGER update_listings_updated_at BEFORE UPDATE ON public.listings
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON public.orders
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+CREATE TRIGGER update_listing_reviews_updated_at BEFORE UPDATE ON public.listing_reviews
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- ============================================================================
