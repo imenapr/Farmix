@@ -339,6 +339,12 @@
   border: 1px solid rgba(26, 31, 54, 0.16);
 }
 
+.nav-role-badge.role-consumer {
+  background: rgba(115, 215, 0, 0.14);
+  color: var(--color-primary-800);
+  border: 1px solid rgba(115, 215, 0, 0.28);
+}
+
 .nav-role-badge.role-guest {
   background: rgba(26, 31, 54, 0.08);
   color: var(--color-text);

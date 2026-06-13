@@ -32,11 +32,20 @@ function renderAccountForm() {
   if (!accountUser || !accountRecord) return;
 
   const record = accountRecord;
+  const isFarmer = record.role === "farmer";
+  const isBusiness = record.role === "business";
+  const roleLabel = {
+    farmer: t("nav.role.farmer"),
+    business: t("nav.role.business"),
+    consumer: t("nav.role.consumer"),
+    admin: t("nav.role.admin"),
+  }[record.role] ?? record.role;
+
   root.innerHTML = `
     <section class="card pad" style="max-width: 720px;">
       <form id="profile-form" class="stack" novalidate>
         <div class="muted" style="font-size: var(--text-sm);">
-          ${t("account.signedInAs")} <strong>${record.email}</strong> · ${t("common.role")} <strong>${record.role}</strong>
+          ${t("account.signedInAs")} <strong>${record.email}</strong> · ${t("common.role")} <strong>${roleLabel}</strong>
         </div>
 
         <div class="grid" style="grid-template-columns: 1fr; gap: 0.85rem;">
@@ -66,16 +75,26 @@ function renderAccountForm() {
         </div>
 
         <div class="grid" style="grid-template-columns: 1fr; gap: 0.85rem;">
+          ${
+            isFarmer
+              ? `
           <label class="stack" style="gap:0.35rem;">
             <span style="font-weight: 700;">${t("account.farmName")}</span>
             <input class="input" name="farmName" />
             <span class="error-text" data-err="farmName"></span>
-          </label>
+          </label>`
+              : ""
+          }
+          ${
+            isBusiness
+              ? `
           <label class="stack" style="gap:0.35rem;">
             <span style="font-weight: 700;">${t("account.companyName")}</span>
             <input class="input" name="companyName" />
             <span class="error-text" data-err="companyName"></span>
-          </label>
+          </label>`
+              : ""
+          }
         </div>
 
         <p class="error-text" data-err="form" style="margin:0;"></p>

@@ -18,7 +18,7 @@ export const setRole = (next) => { _role = next ?? "guest"; };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function roleBadgeClass(role) {
-  const map = { farmer: "role-farmer", business: "role-business", admin: "role-admin" };
+  const map = { farmer: "role-farmer", business: "role-business", consumer: "role-consumer", admin: "role-admin" };
   return map[role] ?? "role-guest";
 }
 
@@ -26,6 +26,7 @@ function roleBadgeLabel(role) {
   const map = {
     farmer: t("nav.role.farmer"),
     business: t("nav.role.business"),
+    consumer: t("nav.role.consumer"),
     admin: t("nav.role.admin"),
   };
   return map[role] ?? t("nav.role.guest");
@@ -43,6 +44,11 @@ function roleLinks(role) {
       return `
         <a href="/pages/marketplace.html">${t("nav.link.marketplace")}</a>
         <a href="/pages/for-businesses.html">${t("nav.link.businessSourcing")}</a>
+      `;
+    case "consumer":
+      return `
+        <a href="/pages/marketplace.html">${t("nav.link.marketplace")}</a>
+        <a href="/pages/account.html">${t("nav.link.account")}</a>
       `;
     case "admin":
       return `

@@ -2,6 +2,7 @@ import { getSupabase } from "../lib/supabase.js";
 import { getCache, setCache, invalidateCache } from "../lib/cache.js";
 import { listingFromDb, listingToDb } from "../lib/transform.js";
 import { validateListingInput, validateMarketplaceFilters } from "../data/validators.js";
+import { ROLES } from "../app/config.js";
 import { emit } from "../app/events.js";
 import { getRatingsForListings } from "./reviews.service.js";
 
@@ -155,7 +156,11 @@ export async function getUserListings(userId) {
 /** @deprecated alias */
 export const listSellerListings = getUserListings;
 
-export async function createListing(input, sellerId) {
+export async function createListing(input, sellerId, userRole = ROLES.farmer) {
+  if (userRole !== ROLES.farmer && userRole !== ROLES.admin) {
+    return err("FORBIDDEN", "Only farmers can create listings.");
+  }
+
   const v = validateListingInput(input);
   if (!v.ok) return err("VALIDATION_FAILED", "Fix the highlighted fields.", v.fieldErrors);
 

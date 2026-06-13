@@ -168,9 +168,15 @@
 
 .role-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 0.75rem;
   margin-bottom: 0.4rem;
+}
+
+@media (min-width: 560px) {
+  .role-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .role-card {

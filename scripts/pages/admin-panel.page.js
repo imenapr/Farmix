@@ -111,6 +111,7 @@ async function renderStats() {
     { label: t("admin.activeListings"), value: s.activeListings },
     { label: t("admin.farmers"), value: s.farmerCount },
     { label: t("admin.businesses"), value: s.businessCount },
+    { label: t("admin.consumers"), value: s.consumerCount },
     { label: t("admin.suspended"), value: s.suspendedUsers },
     { label: t("admin.messages"), value: s.totalMessages },
   ];

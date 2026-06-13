@@ -84,6 +84,13 @@ function mountSignup() {
             <span class="role-card-desc">${t("auth.signup.businessDesc")}</span>
           </button>
 
+          <button type="button" class="role-card" data-role="consumer">
+            <span class="role-card-check" aria-hidden="true">&#10003;</span>
+            <span class="role-card-icon">&#128722;</span>
+            <span class="role-card-title">${t("auth.signup.consumer")}</span>
+            <span class="role-card-desc">${t("auth.signup.consumerDesc")}</span>
+          </button>
+
         </div>
         <!-- Hidden radio backing the visual selection -->
         <input type="hidden" name="role" id="role-hidden" value="" />
@@ -248,7 +255,9 @@ function mountSignup() {
     }
 
     toast("success", t("auth.signup.toast", { name: res.data.user.name }));
-    location.href = next || "/index.html";
+    const role = res.data.user?.role;
+    const defaultNext = role === "consumer" ? "/pages/marketplace.html" : "/index.html";
+    location.href = next || defaultNext;
   });
 }
 

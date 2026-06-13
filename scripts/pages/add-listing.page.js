@@ -1,6 +1,7 @@
 import { boot } from "../app/boot.js";
 import { qs, toast } from "../app/ui.js";
 import { initAppState, getCurrentUser } from "../app/auth-state.js";
+import { ROLES } from "../app/config.js";
 import { createListing } from "../services/listings.service.js";
 import { CATEGORIES } from "../data/seed.js";
 import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
@@ -52,6 +53,18 @@ function mountPage() {
         <h2>${t("common.loginRequired")}</h2>
         <p>${t("listingForm.loginRequiredDesc")}</p>
         <a class="btn btn-primary" href="/pages/login.html?next=/pages/add-listing.html">${t("common.login")}</a>
+      </div>
+    `;
+    return;
+  }
+
+  const canSell = user.role === ROLES.farmer || user.role === ROLES.admin;
+  if (!canSell) {
+    root.innerHTML = `
+      <div class="state-block">
+        <h2>${t("listingForm.sellerOnly")}</h2>
+        <p class="muted">${t("auth.signup.consumerDesc")}</p>
+        <a class="btn btn-primary" href="/pages/marketplace.html">${t("nav.link.marketplace")}</a>
       </div>
     `;
     return;
@@ -211,6 +224,7 @@ function wireForm(form) {
           images,
         },
         user.id,
+        user.role,
       );
 
       if (!res.ok) {
