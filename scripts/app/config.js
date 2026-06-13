@@ -7,9 +7,11 @@ export const APP = {
 // Change this before deploying to anything sensitive.
 export const ADMIN_ACCESS_KEY = "FARMIX-ADMIN-2024";
 
+/** UI-only localStorage keys (never authoritative for business data). */
 export const STORAGE_KEYS = {
-  db: "farmix.db",
-  session: "farmix.session",
+  authCache: "farmix.auth.cache",
+  theme: "farmix.theme",
+  categories: "farmix_categories",
 };
 
 export const ROLES = /** @type {const} */ ({

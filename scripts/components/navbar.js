@@ -1,12 +1,13 @@
 import { APP } from "../app/config.js";
 import { on } from "../app/events.js";
-import { logout } from "../app/auth-state.js";
+import { logout, getCurrentUser } from "../app/auth-state.js";
 import { getTheme, toggleTheme } from "../app/theme.js";
 import {
   getNotificationsForUser,
   getUnreadCount,
   markNotificationRead,
   markAllRead,
+  primeNotificationCache,
 } from "../services/notifications.service.js";
 
 // ─── Role state ─────────────────────────────────────────────────────────────
@@ -41,7 +42,7 @@ function roleLinks(role) {
     case "admin":
       return `
         <a href="/pages/marketplace.html">Marketplace</a>
-        <a href="/pages/admin.html">Admin Panel</a>
+        <a href="/pages/admin-panel.html">Admin Panel</a>
         <a href="/pages/add-listing.html">Add Listing</a>
       `;
     default:
@@ -233,13 +234,13 @@ export function mountNavbar(targetEl) {
 
     function renderNotifItems() {
       if (!notifList) return;
-      const res = getNotificationsForUser(userId, { limit: 12 });
-      const items = res.ok ? res.data : [];
-      if (!items.length) {
-        notifList.innerHTML = `<div class="notif-empty">You're all caught up!</div>`;
-        return;
-      }
-      notifList.innerHTML = items.map((n) => `
+      getNotificationsForUser(userId, { limit: 12 }).then((res) => {
+        const items = res.ok ? res.data : [];
+        if (!items.length) {
+          notifList.innerHTML = `<div class="notif-empty">You're all caught up!</div>`;
+          return;
+        }
+        notifList.innerHTML = items.map((n) => `
         <div class="notif-item${n.read ? "" : " unread"}" data-notif-id="${esc(n.id)}" role="button" tabindex="0">
           <div class="notif-item-dot"></div>
           <div class="notif-item-body">
@@ -249,15 +250,16 @@ export function mountNavbar(targetEl) {
         </div>
       `).join("");
 
-      notifList.querySelectorAll("[data-notif-id]").forEach((item) => {
-        const markRead = () => {
-          markNotificationRead(item.dataset.notifId);
-          item.classList.remove("unread");
-          item.querySelector(".notif-item-dot")?.classList.add("read");
-          updateBadge();
-        };
-        item.addEventListener("click", markRead);
-        item.addEventListener("keydown", (e) => { if (e.key === "Enter") markRead(); });
+        notifList.querySelectorAll("[data-notif-id]").forEach((item) => {
+          const markRead = () => {
+            markNotificationRead(item.dataset.notifId, userId);
+            item.classList.remove("unread");
+            item.querySelector(".notif-item-dot")?.classList.add("read");
+            updateBadge();
+          };
+          item.addEventListener("click", markRead);
+          item.addEventListener("keydown", (e) => { if (e.key === "Enter") markRead(); });
+        });
       });
     }
 
@@ -297,11 +299,14 @@ export function mountNavbar(targetEl) {
     if (markAllBtn) {
       markAllBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        markAllRead(userId);
-        renderNotifItems();
-        updateBadge();
+        markAllRead(userId).then(() => {
+          renderNotifItems();
+          updateBadge();
+        });
       });
     }
+
+    primeNotificationCache(userId).then(updateBadge);
 
     // Subscribe to notification changes to update badge live
     _unsubNotif = on("notifications:changed", ({ userId: changedFor }) => {

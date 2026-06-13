@@ -1,5 +1,4 @@
-import { initAuthSession, login } from "../services/auth.service.js";
-import { getDb } from "../data/db.js";
+import { initAppState, login, getCurrentUser } from "../app/auth-state.js";
 import { ADMIN_ACCESS_KEY, ROLES } from "../app/config.js";
 import { initToasts } from "../components/toast.js";
 import { emit } from "../app/events.js";
@@ -7,30 +6,25 @@ import { initTheme } from "../app/theme.js";
 
 initTheme();
 initToasts();
-function admToast(type, message) { emit("toast", { type, message }); }
 
-// If already verified, skip straight to dashboard
-initAuthSession();
-(function checkAlreadyIn() {
+function admToast(type, message) {
+  emit("toast", { type, message });
+}
+
+initAppState().then(() => {
   const verified = sessionStorage.getItem("farmix.admin.verified");
-  const raw = localStorage.getItem("farmix.session");
-  if (!verified || !raw) return;
-  try {
-    const session = JSON.parse(raw);
-    const db = getDb();
-    const user = db.users.find((u) => u.id === session.userId);
-    if (user?.role === ROLES.admin && !user.suspended) {
-      location.replace("/pages/admin-dashboard.html");
-    }
-  } catch { /* ignore */ }
-})();
+  const user = getCurrentUser();
+  if (verified && user?.role === ROLES.admin && !user.suspended) {
+    location.replace("/pages/admin-panel.html");
+  }
+});
 
-const form        = document.getElementById("admin-login-form");
-const emailInput  = document.getElementById("email");
-const passInput   = document.getElementById("password");
-const keyInput    = document.getElementById("access-key");
-const errBanner   = document.getElementById("login-err");
-const submitBtn   = document.getElementById("login-btn");
+const form = document.getElementById("admin-login-form");
+const emailInput = document.getElementById("email");
+const passInput = document.getElementById("password");
+const keyInput = document.getElementById("access-key");
+const errBanner = document.getElementById("login-err");
+const submitBtn = document.getElementById("login-btn");
 
 function showBanner(msg) {
   errBanner.textContent = msg;
@@ -53,18 +47,18 @@ function clearErrors() {
   fieldErr("access-key-err", "");
 }
 
-form.addEventListener("submit", (e) => {
+form.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearErrors();
 
-  const email    = emailInput.value.trim();
+  const email = emailInput.value.trim();
   const password = passInput.value;
-  const key      = keyInput.value.trim();
+  const key = keyInput.value.trim();
 
   let hasErr = false;
-  if (!email)    { fieldErr("email-err", "Email is required."); hasErr = true; }
+  if (!email) { fieldErr("email-err", "Email is required."); hasErr = true; }
   if (!password) { fieldErr("password-err", "Password is required."); hasErr = true; }
-  if (!key)      { fieldErr("access-key-err", "Access key is required."); hasErr = true; }
+  if (!key) { fieldErr("access-key-err", "Access key is required."); hasErr = true; }
   if (hasErr) return;
 
   if (key !== ADMIN_ACCESS_KEY) {
@@ -76,33 +70,30 @@ form.addEventListener("submit", (e) => {
   submitBtn.disabled = true;
   submitBtn.textContent = "Signing in…";
 
-  // Small delay for UX feel
-  setTimeout(() => {
-    const result = login({ email, password });
+  const result = await login({ email, password });
 
-    if (!result.ok) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Sign in to Admin";
-      const code = result.error?.code;
-      if (code === "ACCOUNT_SUSPENDED") {
-        showBanner(result.error.message);
-      } else if (result.error?.fieldErrors) {
-        if (result.error.fieldErrors.email)    fieldErr("email-err", result.error.fieldErrors.email);
-        if (result.error.fieldErrors.password) fieldErr("password-err", result.error.fieldErrors.password);
-      } else {
-        showBanner(result.error?.message ?? "Login failed. Check your credentials.");
-      }
-      return;
+  if (!result.ok) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Sign in to Admin";
+    const code = result.error?.code;
+    if (code === "ACCOUNT_SUSPENDED") {
+      showBanner(result.error.message);
+    } else if (result.error?.fieldErrors) {
+      if (result.error.fieldErrors.email) fieldErr("email-err", result.error.fieldErrors.email);
+      if (result.error.fieldErrors.password) fieldErr("password-err", result.error.fieldErrors.password);
+    } else {
+      showBanner(result.error?.message ?? "Login failed. Check your credentials.");
     }
+    return;
+  }
 
-    if (result.data.user.role !== ROLES.admin) {
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Sign in to Admin";
-      showBanner("This account does not have admin privileges.");
-      return;
-    }
+  if (result.data.user.role !== ROLES.admin) {
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Sign in to Admin";
+    showBanner("This account does not have admin privileges.");
+    return;
+  }
 
-    sessionStorage.setItem("farmix.admin.verified", "1");
-    location.replace("/pages/admin-dashboard.html");
-  }, 280);
+  sessionStorage.setItem("farmix.admin.verified", "1");
+  location.replace("/pages/admin-panel.html");
 });

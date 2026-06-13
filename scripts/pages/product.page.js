@@ -1,7 +1,8 @@
 import { boot } from "../app/boot.js";
-import { getCurrentUser, initAuthSession } from "../services/auth.service.js";
+import { getCurrentUser } from "../app/auth-state.js";
+import { getListingById } from "../app/state.js";
 import { escapeHtml, renderStateBlock, toast, qs, setText } from "../app/ui.js";
-import { getListingById, incrementListingView, archiveListingAsOwnerOrAdmin } from "../services/listings.service.js";
+import { incrementListingView, archiveListingAsOwnerOrAdmin } from "../services/listings.service.js";
 import { createInquiry } from "../services/messages.service.js";
 
 boot();
@@ -44,7 +45,7 @@ async function initPage() {
   incrementListingView(listing.id);
 
   const user = getCurrentUser();
-  const isOwner = user && user.id === listing.seller_id;
+  const isOwner = user && user.id === listing.sellerId;
   const isAdmin = user && user.role === "admin";
   const canManage = isOwner || isAdmin;
 
@@ -82,9 +83,9 @@ async function initPage() {
           <div class="product-price">${escapeHtml(price)} / ${escapeHtml(listing.unit)}</div>
 
           <div class="listing-meta" style="margin-top:0.6rem;">
-            <span class="pill">${escapeHtml(listing.category_id)}</span>
+            <span class="pill">${escapeHtml(listing.categoryId)}</span>
             <span class="pill">${escapeHtml(listing.location || "")}</span>
-            <span class="pill">${escapeHtml(String(listing.quantity_available))} available</span>
+            <span class="pill">${escapeHtml(String(listing.quantityAvailable))} available</span>
             <span class="pill" style="color: #666;">${listing.status === "active" ? "Available" : listing.status === "sold" ? "Sold" : "Archived"}</span>
           </div>
 
@@ -115,8 +116,8 @@ async function initPage() {
       <aside class="stack">
         <section class="card pad seller-box">
           <div class="pill">Seller</div>
-          <div style="font-weight:850; letter-spacing:-0.01em;">${escapeHtml(listing.seller_name || "Unknown Seller")}</div>
-          <div class="muted" style="font-size:var(--text-sm);">${escapeHtml(listing.seller_location || listing.location || "")}</div>
+          <div style="font-weight:850; letter-spacing:-0.01em;">${escapeHtml(listing.sellerName || "Unknown Seller")}</div>
+          <div class="muted" style="font-size:var(--text-sm);">${escapeHtml(listing.sellerLocation || listing.location || "")}</div>
           <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.35rem;">
             ${
               !user
@@ -163,7 +164,6 @@ async function initPage() {
     </div>
   `;
 
-  // Image gallery
   const mainImage = qs(root, "[data-main-image]");
   const thumbButtons = root.querySelectorAll("[data-thumb]");
   thumbButtons.forEach((btn) => {
@@ -176,7 +176,6 @@ async function initPage() {
     });
   });
 
-  // Description expand/collapse
   const desc = qs(root, "[data-desc]");
   const descToggle = qs(root, "[data-desc-toggle]");
   if (String(listing.description ?? "").length <= 180) {
@@ -194,33 +193,27 @@ async function initPage() {
     }
   });
 
-  // Delete button
   const deleteBtn = root.querySelector("[data-delete]");
   if (deleteBtn && canManage) {
     deleteBtn.addEventListener("click", async () => {
-      if (!confirm("Are you sure you want to delete this listing? This action cannot be undone.")) {
-        return;
-      }
+      if (!confirm("Are you sure you want to delete this listing? This action cannot be undone.")) return;
 
       deleteBtn.disabled = true;
       deleteBtn.textContent = "Deleting...";
 
-      const res = await archiveListingAsOwnerOrAdmin(id, user.id, user.role);
-      if (!res.ok) {
+      const delRes = await archiveListingAsOwnerOrAdmin(id, user.id, user.role);
+      if (!delRes.ok) {
         deleteBtn.disabled = false;
         deleteBtn.textContent = "Delete";
-        toast("error", res.error || "Failed to delete listing");
+        toast("error", delRes.error?.message ?? "Failed to delete listing");
         return;
       }
 
       toast("success", "Listing deleted successfully");
-      setTimeout(() => {
-        window.location.href = "/pages/marketplace.html";
-      }, 1000);
+      setTimeout(() => { window.location.href = "/pages/marketplace.html"; }, 1000);
     });
   }
 
-  // Inquiry form
   const form = root.querySelector("#inquiry-form");
   if (form) {
     const submitBtn = qs(form, "[data-submit]");
@@ -235,13 +228,13 @@ async function initPage() {
       submitBtn.textContent = isLoading ? "Sending..." : "Send inquiry";
     }
 
-    form.addEventListener("submit", (e) => {
+    form.addEventListener("submit", async (e) => {
       e.preventDefault();
       clearErrors();
       setLoading(true);
 
       const fd = new FormData(form);
-      const r = createInquiry(user.id, listing.id, {
+      const r = await createInquiry(user.id, listing.id, {
         name: fd.get("name"),
         email: fd.get("email"),
         phone: fd.get("phone"),
@@ -268,5 +261,4 @@ async function initPage() {
   }
 }
 
-initAuthSession();
 initPage();

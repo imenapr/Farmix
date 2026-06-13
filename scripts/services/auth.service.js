@@ -1,40 +1,45 @@
-import { STORAGE_KEYS, ROLES } from "../app/config.js";
+import { STORAGE_KEYS } from "../app/config.js";
 import { emit } from "../app/events.js";
-import { getDb, withDb } from "../data/db.js";
-import { hashPasswordMock } from "../data/seed.js";
+import { getSupabase } from "../lib/supabase.js";
+import { userFromDb } from "../lib/transform.js";
 import { validateLogin, validateSignup } from "../data/validators.js";
 import { createNotification } from "./notifications.service.js";
-import { supabase, SUPABASE_SESSION_KEY } from "../lib/supabase.js";
+import { ROLES } from "../app/config.js";
 
 /** @typedef {{ ok: true, data: any } | { ok: false, error: { code: string, message: string, fieldErrors?: Record<string,string> } }} Result */
 
-/** @type {any | null} */
+/** @type {ReturnType<typeof userFromDb>} */
 let currentUser = null;
 
-function now() {
-  return Date.now();
+function err(code, message, fieldErrors) {
+  return { ok: false, error: { code, message, fieldErrors } };
 }
 
-function toUserPublic(u) {
-  if (!u) return null;
-  // eslint-disable-next-line no-unused-vars
-  const { passwordHash, ...rest } = u;
-  return rest;
+function ok(data) {
+  return { ok: true, data };
 }
 
-function setSession(session) {
-  if (!session) localStorage.removeItem(STORAGE_KEYS.session);
-  else localStorage.setItem(STORAGE_KEYS.session, JSON.stringify(session));
+function setAuthCache(user) {
+  try {
+    if (!user) localStorage.removeItem(STORAGE_KEYS.authCache);
+    else localStorage.setItem(STORAGE_KEYS.authCache, JSON.stringify(user));
+  } catch {
+    /* ignore quota errors */
+  }
 }
 
-function getSession() {
-  const raw = localStorage.getItem(STORAGE_KEYS.session);
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
+function readAuthCache() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.authCache);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
-function setCurrentUserInternal(userRecordOrNull) {
-  currentUser = userRecordOrNull ? toUserPublic(userRecordOrNull) : null;
+function setCurrentUserInternal(user) {
+  currentUser = user;
+  setAuthCache(user);
   emit("auth:changed", { user: currentUser });
 }
 
@@ -42,274 +47,205 @@ export function getCurrentUser() {
   return currentUser;
 }
 
-// ─── initAuthSession ─────────────────────────────────────────────────────────
-// Prioritizes Supabase session. Only loads local DB as fallback.
-// This allows Supabase-only mode where local DB is not needed.
-export function initAuthSession() {
-  // 1. Try Supabase session FIRST (primary for production)
+async function fetchUserProfile(userId) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("users").select("*").eq("id", userId).maybeSingle();
+  if (error || !data) return null;
+  if (data.suspended) return null;
+  return userFromDb(data);
+}
+
+async function upsertUserProfile(row) {
+  const supabase = getSupabase();
+  const { error } = await supabase.from("users").upsert(row, { onConflict: "id" });
+  return !error;
+}
+
+// ─── Session init (Supabase authoritative) ───────────────────────────────────
+export async function initAuthSession() {
+  const supabase = getSupabase();
+
   try {
-    const raw = localStorage.getItem(SUPABASE_SESSION_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      const supaUser = parsed?.user;
-      if (supaUser?.email) {
-        // User from Supabase session - doesn't need local DB lookup
-        const user = {
-          id: supaUser.id,
-          email: supaUser.email,
-          name: supaUser.user_metadata?.name || supaUser.email.split("@")[0],
-          role: supaUser.user_metadata?.role || "consumer",
-          location: supaUser.user_metadata?.location || "",
-          createdAt: supaUser.created_at,
-        };
-        setCurrentUserInternal(user);
-        // Silently refresh the Supabase token in the background
-        supabase.auth.getSession().catch(() => {});
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user?.id) {
+      const profile = await fetchUserProfile(session.user.id);
+      if (profile) {
+        setCurrentUserInternal(profile);
         return;
       }
     }
-  } catch { /* fall through */ }
-
-  // 2. Fallback to local DB session (legacy/testing only)
-  try {
-    const session = getSession();
-    if (!session?.userId) {
-      setCurrentUserInternal(null);
-      return;
-    }
-    
-    const db = getDb();
-    const user = db.users.find((u) => u.id === session.userId) ?? null;
-    if (user?.suspended) {
-      setSession(null);
-      setCurrentUserInternal(null);
-      return;
-    }
-    setCurrentUserInternal(user);
   } catch {
-    // If DB loading fails, just set user to null (Supabase mode)
-    setCurrentUserInternal(null);
+    /* fall through */
   }
-}
 
-// ─── logout ──────────────────────────────────────────────────────────────────
-export async function logout() {
-  supabase.auth.signOut().catch(() => {});
-  setSession(null);
+  // Non-authoritative cache for faster paint while session refreshes
+  const cached = readAuthCache();
+  if (cached?.id) {
+    const profile = await fetchUserProfile(cached.id);
+    if (profile) {
+      setCurrentUserInternal(profile);
+      return;
+    }
+  }
+
   setCurrentUserInternal(null);
-  return { ok: true, data: null };
 }
 
-// ─── signup ──────────────────────────────────────────────────────────────────
+export async function logout() {
+  const supabase = getSupabase();
+  await supabase.auth.signOut().catch(() => {});
+  setCurrentUserInternal(null);
+  return ok(null);
+}
+
 export async function signup(input) {
   const v = validateSignup(input);
-  if (!v.ok) {
-    return {
-      ok: false,
-      error: { code: "VALIDATION_FAILED", message: "Fix the highlighted fields.", fieldErrors: v.fieldErrors },
-    };
-  }
+  if (!v.ok) return err("VALIDATION_FAILED", "Fix the highlighted fields.", v.fieldErrors);
 
   const { email, password, role, name, location, farmName, companyName } = v.value;
-
   if (![ROLES.farmer, ROLES.business, ROLES.consumer].includes(role)) {
-    return { ok: false, error: { code: "VALIDATION_FAILED", message: "Select a valid role." } };
+    return err("VALIDATION_FAILED", "Select a valid role.");
   }
 
-  // Register in Supabase Auth
-  const supaSignup = await supabase.auth.signUp({
+  const supabase = getSupabase();
+  const { data: signData, error: signError } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { name, role } },
+    options: { data: { name, role, location } },
   });
 
-  if (supaSignup.error) {
-    if (supaSignup.error.message?.toLowerCase().includes("already registered")) {
-      return { ok: false, error: { code: "CONFLICT", message: "An account with this email already exists." } };
+  if (signError) {
+    if (signError.message?.toLowerCase().includes("already registered")) {
+      return err("CONFLICT", "An account with this email already exists.");
     }
-    return { ok: false, error: { code: "AUTH_ERROR", message: supaSignup.error.message } };
+    return err("AUTH_ERROR", signError.message);
   }
 
-  const supabaseUserId = supaSignup.data?.user?.id;
-  if (!supabaseUserId) {
-    return { ok: false, error: { code: "AUTH_ERROR", message: "Failed to create Supabase user." } };
-  }
+  const authUser = signData.user;
+  if (!authUser?.id) return err("AUTH_ERROR", "Failed to create account.");
 
-  // Create user profile in Supabase users table (requires INSERT policy on users table)
-  const userProfileData = {
-    id: supabaseUserId,
+  const now = new Date().toISOString();
+  const profileRow = {
+    id: authUser.id,
     email,
     role,
     name,
     location,
     farm_name: farmName || null,
     company_name: companyName || null,
-    created_at: now(),
-    updated_at: now(),
+    created_at: now,
+    updated_at: now,
   };
 
-  await supabase
-    .from("users")
-    .insert([userProfileData])
-    .catch(() => {}); // Silently fail if RLS blocks it (policy not yet added)
+  const saved = await upsertUserProfile(profileRow);
+  if (!saved) return err("DB_ERROR", "Account created but profile save failed. Try logging in.");
 
-  // Sync to local db (using Supabase UUID as ID for consistency)
-  const created = { userPublic: null };
-  withDb((db) => {
-    const t = now();
-    const user = {
-      id: supabaseUserId,
-      email,
-      passwordHash: hashPasswordMock(password),
-      role,
-      name,
-      location,
-      createdAt: t,
-      updatedAt: t,
-    };
+  const userPublic = userFromDb(profileRow);
+  setCurrentUserInternal(userPublic);
 
-    if (role === ROLES.farmer   && farmName)    user.farmName    = farmName;
-    if (role === ROLES.business && companyName) user.companyName = companyName;
-
-    db.users.push(user);
-    created.userPublic = toUserPublic(user);
-    return db;
-  });
-
-  // Notify admins on new farmer registration
   if (role === ROLES.farmer) {
-    const currentDb = getDb();
-    currentDb.users
-      .filter((u) => u.role === ROLES.admin)
-      .forEach((admin) => {
-        createNotification({
-          userId  : admin.id,
-          type    : "new_farmer_registered",
-          message : `New farmer registered: ${name} (${email})`,
-          metadata: { farmerId: supabaseUserId, farmerName: name, farmerEmail: email },
-        });
+    const { data: admins } = await supabase.from("users").select("id").eq("role", ROLES.admin);
+    for (const admin of admins ?? []) {
+      createNotification({
+        userId: admin.id,
+        type: "system",
+        title: "New farmer registered",
+        message: `New farmer registered: ${name} (${email})`,
+        metadata: { farmerId: authUser.id, farmerName: name, farmerEmail: email },
       });
+    }
   }
 
-  setSession({ userId: supabaseUserId, token: `t_${now()}`, createdAt: now() });
-  setCurrentUserInternal(created.userPublic);
-  return { ok: true, data: { user: created.userPublic } };
+  return ok({ user: userPublic });
 }
 
-// ─── login ───────────────────────────────────────────────────────────────────
 export async function login(input) {
   const v = validateLogin(input);
-  if (!v.ok) {
-    return {
-      ok: false,
-      error: { code: "VALIDATION_FAILED", message: "Fix the highlighted fields.", fieldErrors: v.fieldErrors },
-    };
-  }
+  if (!v.ok) return err("VALIDATION_FAILED", "Fix the highlighted fields.", v.fieldErrors);
 
   const { email, password } = v.value;
+  const supabase = getSupabase();
 
-  // 1. Try Supabase auth first
-  try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (!error && data?.user) {
-      const db   = getDb();
-      const user = db.users.find((u) => u.email === email) ?? null;
-      if (user) {
-        if (user.suspended) {
-          await supabase.auth.signOut();
-          return { ok: false, error: { code: "ACCOUNT_SUSPENDED", message: "Your account has been suspended. Please contact support." } };
-        }
-        setCurrentUserInternal(user);
-        return { ok: true, data: { user: toUserPublic(user) } };
-      }
-      // Supabase user exists but no local profile — create one
-      const t = now();
-      const newUser = {
-        id          : `usr_${crypto.randomUUID?.() ?? `${t}_${Math.random().toString(16).slice(2)}`}`,
-        email,
-        passwordHash: hashPasswordMock(password),
-        role        : (data.user.user_metadata?.role ?? ROLES.consumer),
-        name        : (data.user.user_metadata?.name ?? email.split("@")[0]),
-        location    : "",
-        createdAt   : t,
-        updatedAt   : t,
-      };
-      withDb((db) => { db.users.push(newUser); return db; });
-      setCurrentUserInternal(newUser);
-      return { ok: true, data: { user: toUserPublic(newUser) } };
-    }
-  } catch { /* fall through to localStorage */ }
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !data?.user?.id) {
+    return err("AUTH_FAILED", "Invalid email or password.");
+  }
 
-  // 2. Fallback: localStorage auth (handles seed/demo users)
-  const db   = getDb();
-  const user = db.users.find((u) => u.email === email);
-  if (!user)                                         return { ok: false, error: { code: "AUTH_FAILED", message: "Invalid email or password." } };
-  if (user.passwordHash !== hashPasswordMock(password)) return { ok: false, error: { code: "AUTH_FAILED", message: "Invalid email or password." } };
-  if (user.suspended)                                return { ok: false, error: { code: "ACCOUNT_SUSPENDED", message: "Your account has been suspended. Please contact support." } };
+  let profile = await fetchUserProfile(data.user.id);
+  if (!profile) {
+    const meta = data.user.user_metadata ?? {};
+    const now = new Date().toISOString();
+    const row = {
+      id: data.user.id,
+      email: data.user.email,
+      role: meta.role ?? ROLES.consumer,
+      name: meta.name ?? String(email).split("@")[0],
+      location: meta.location ?? "",
+      created_at: now,
+      updated_at: now,
+    };
+    await upsertUserProfile(row);
+    profile = userFromDb(row);
+  }
 
-  // Silently auto-register seed user in Supabase so future logins go through Supabase
-  supabase.auth.signInWithPassword({ email, password }).catch(() => {
-    supabase.auth.signUp({ email, password, options: { data: { name: user.name, role: user.role } } }).catch(() => {});
-  });
+  if (profile.suspended) {
+    await supabase.auth.signOut();
+    return err("ACCOUNT_SUSPENDED", "Your account has been suspended. Please contact support.");
+  }
 
-  setSession({ userId: user.id, token: `t_${now()}`, createdAt: now() });
-  setCurrentUserInternal(user);
-  return { ok: true, data: { user: toUserPublic(user) } };
+  setCurrentUserInternal(profile);
+  return ok({ user: profile });
 }
 
-// ─── loginWithGoogle ─────────────────────────────────────────────────────────
-export function loginWithGoogle(googleUser) {
+/** Google OAuth — creates/updates Supabase-linked profile row. */
+export async function loginWithGoogle(googleUser) {
   const { email, name, picture } = googleUser;
-  const created = { userPublic: null };
+  const supabase = getSupabase();
 
-  withDb((db) => {
-    let user = db.users.find((u) => u.email === email);
-    if (user) {
-      if (user.name !== name || user.picture !== picture) {
-        user.name    = name;
-        user.picture = picture;
-        user.updatedAt = now();
-      }
-    } else {
-      const t = now();
-      user = {
-        id          : `usr_${crypto.randomUUID?.() ?? `${t}_${Math.random().toString(16).slice(2)}`}`,
-        email,
-        passwordHash: null,
-        role        : ROLES.consumer,
-        name,
-        location    : "",
-        picture,
-        createdAt   : t,
-        updatedAt   : t,
-      };
-      db.users.push(user);
-    }
-    created.userPublic = toUserPublic(user);
-    return db;
-  });
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return err("AUTH_REQUIRED", "Complete Google sign-in first.");
+  }
 
-  setSession({ userId: created.userPublic.id, token: `t_${now()}`, createdAt: now() });
-  setCurrentUserInternal(created.userPublic);
-  return { ok: true, data: { user: created.userPublic } };
+  const existing = await fetchUserProfile(session.user.id);
+  const now = new Date().toISOString();
+  const row = {
+    id: session.user.id,
+    email: email ?? session.user.email,
+    role: existing?.role ?? ROLES.consumer,
+    name: name ?? existing?.name ?? "User",
+    location: existing?.location ?? "",
+    avatar_url: picture ?? existing?.avatarUrl ?? null,
+    updated_at: now,
+    created_at: existing?.createdAt ?? now,
+  };
+
+  await upsertUserProfile(row);
+  const profile = userFromDb(row);
+  setCurrentUserInternal(profile);
+  return ok({ user: profile });
 }
 
 export function requireAuth() {
-  if (!currentUser) return { ok: false, error: { code: "AUTH_REQUIRED", message: "Login required." } };
-  return { ok: true, data: { user: currentUser } };
+  if (!currentUser) return err("AUTH_REQUIRED", "Login required.");
+  return ok({ user: currentUser });
 }
 
 export function watchSession() {
-  window.addEventListener("storage", (e) => {
-    if (e.key !== STORAGE_KEYS.db) return;
-    const session = getSession();
-    if (!session?.userId) return;
-    const db   = getDb();
-    const user = db.users.find((u) => u.id === session.userId) ?? null;
-    if (!user || user.suspended) {
-      setSession(null);
+  const supabase = getSupabase();
+  supabase.auth.onAuthStateChange(async (event) => {
+    if (event === "SIGNED_OUT") {
       setCurrentUserInternal(null);
-      window.location.href = "/pages/login.html";
+      return;
+    }
+    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) {
+        setCurrentUserInternal(null);
+        return;
+      }
+      const profile = await fetchUserProfile(session.user.id);
+      setCurrentUserInternal(profile);
     }
   });
 }

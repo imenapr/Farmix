@@ -1,6 +1,6 @@
 import { boot } from "../app/boot.js";
 import { qs, setText, toast } from "../app/ui.js";
-import { getCurrentUser } from "../services/auth.service.js";
+import { getCurrentUser } from "../app/auth-state.js";
 import { createListing } from "../services/listings.service.js";
 import { CATEGORIES } from "../data/seed.js";
 

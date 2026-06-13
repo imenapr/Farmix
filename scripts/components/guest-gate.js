@@ -1,4 +1,4 @@
-import { getCurrentUser } from "../services/auth.service.js";
+import { getCurrentUser } from "../app/auth-state.js";
 
 let mounted = false;
 let backdropEl = null;

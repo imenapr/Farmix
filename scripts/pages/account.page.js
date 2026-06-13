@@ -1,23 +1,25 @@
 import { boot } from "../app/boot.js";
 import { guardAuth } from "../app/router-guards.js";
 import { toast, qs, setText } from "../app/ui.js";
-import { logout as doLogout, initAuthSession } from "../services/auth.service.js";
+import { logout as doLogout } from "../app/auth-state.js";
+import { initAppState } from "../app/state.js";
 import { getUserById, updateProfile } from "../services/users.service.js";
 
 boot();
 
 const root = document.getElementById("account-root");
 if (root) {
-  const user = guardAuth();
-  if (!user) {
-    // guardAuth will redirect.
-  } else {
-    const fetched = getUserById(user.id);
+  guardAuth().then(async (user) => {
+    if (!user) return;
+
+    const fetched = await getUserById(user.id);
     if (!fetched.ok) {
       root.innerHTML = `<div class="state-block"><h2 class="state-title">Account not found</h2><p class="state-desc">Please log in again.</p></div>`;
-    } else {
-      const record = fetched.data;
-      root.innerHTML = `
+      return;
+    }
+
+    const record = fetched.data;
+    root.innerHTML = `
         <section class="card pad" style="max-width: 720px;">
           <form id="profile-form" class="stack" novalidate>
             <div class="muted" style="font-size: var(--text-sm);">
@@ -73,70 +75,68 @@ if (root) {
         </section>
       `;
 
-      const form = qs(root, "#profile-form");
-      const submitBtn = qs(root, "[data-submit]");
-      const logoutBtn = qs(root, "[data-logout]");
+    const form = qs(root, "#profile-form");
+    const submitBtn = qs(root, "[data-submit]");
+    const logoutBtn = qs(root, "[data-logout]");
 
-      const setVal = (name, value) => {
-        const el = form.elements.namedItem(name);
-        if (el) el.value = value ?? "";
-      };
+    const setVal = (name, value) => {
+      const el = form.elements.namedItem(name);
+      if (el) el.value = value ?? "";
+    };
 
-      setVal("name", record.name);
-      setVal("location", record.location);
-      setVal("phone", record.phone);
-      setVal("bio", record.bio);
-      setVal("farmName", record.farmName);
-      setVal("companyName", record.companyName);
+    setVal("name", record.name);
+    setVal("location", record.location);
+    setVal("phone", record.phone);
+    setVal("bio", record.bio);
+    setVal("farmName", record.farmName);
+    setVal("companyName", record.companyName);
 
-      const err = (k) => qs(root, `[data-err='${k}']`);
-      const errForm = err("form");
+    const err = (k) => qs(root, `[data-err='${k}']`);
+    const errForm = err("form");
 
-      function clearErrors() {
-        for (const k of ["name", "location", "phone", "bio", "farmName", "companyName", "form"]) setText(err(k), "");
-      }
-
-      function setLoading(isLoading) {
-        submitBtn.disabled = isLoading;
-        submitBtn.textContent = isLoading ? "Saving..." : "Save changes";
-      }
-
-      form.addEventListener("submit", (e) => {
-        e.preventDefault();
-        clearErrors();
-        setLoading(true);
-
-        const fd = new FormData(form);
-        const res = updateProfile(user.id, {
-          name: fd.get("name"),
-          location: fd.get("location"),
-          phone: fd.get("phone"),
-          bio: fd.get("bio"),
-          farmName: fd.get("farmName"),
-          companyName: fd.get("companyName"),
-        });
-
-        if (!res.ok) {
-          setLoading(false);
-          for (const [k, msg] of Object.entries(res.error.fieldErrors ?? {})) {
-            const el = root.querySelector(`[data-err='${k}']`);
-            if (el) el.textContent = msg;
-          }
-          setText(errForm, res.error.message ?? "Fix the highlighted fields.");
-          return;
-        }
-
-        setLoading(false);
-        toast("success", "Profile updated.");
-        initAuthSession(); // refresh navbar display name if changed
-      });
-
-      logoutBtn.addEventListener("click", () => {
-        doLogout();
-        toast("success", "Logged out.");
-        location.href = "/index.html";
-      });
+    function clearErrors() {
+      for (const k of ["name", "location", "phone", "bio", "farmName", "companyName", "form"]) setText(err(k), "");
     }
-  }
-}
 
+    function setLoading(isLoading) {
+      submitBtn.disabled = isLoading;
+      submitBtn.textContent = isLoading ? "Saving..." : "Save changes";
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearErrors();
+      setLoading(true);
+
+      const fd = new FormData(form);
+      const res = await updateProfile(user.id, {
+        name: fd.get("name"),
+        location: fd.get("location"),
+        phone: fd.get("phone"),
+        bio: fd.get("bio"),
+        farmName: fd.get("farmName"),
+        companyName: fd.get("companyName"),
+      });
+
+      if (!res.ok) {
+        setLoading(false);
+        for (const [k, msg] of Object.entries(res.error.fieldErrors ?? {})) {
+          const el = root.querySelector(`[data-err='${k}']`);
+          if (el) el.textContent = msg;
+        }
+        setText(errForm, res.error.message ?? "Fix the highlighted fields.");
+        return;
+      }
+
+      setLoading(false);
+      toast("success", "Profile updated.");
+      await initAppState();
+    });
+
+    logoutBtn.addEventListener("click", async () => {
+      await doLogout();
+      toast("success", "Logged out.");
+      location.href = "/index.html";
+    });
+  });
+}

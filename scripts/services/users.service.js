@@ -1,73 +1,36 @@
-import { getDb, updateDb } from "../services/db.provider.js";
+import { getSupabase } from "../lib/supabase.js";
+import { userFromDb, keysToSnake } from "../lib/transform.js";
 import { validateProfileUpdate } from "../data/validators.js";
+import { invalidateCache } from "../lib/cache.js";
 
-function toUserPublic(u) {
-  const { passwordHash, ...rest } = u;
-  return rest;
+function err(code, message, fieldErrors) {
+  return { ok: false, error: { code, message, fieldErrors } };
 }
 
-/* ─────────────────────────────
-   GET USER
-───────────────────────────── */
-export function getUserById(userId) {
-  const db = getDb();
-
-  const user = db.users.find((x) => x.id === userId);
-
-  if (!user) {
-    return {
-      ok: false,
-      error: { code: "NOT_FOUND", message: "User not found." },
-    };
-  }
-
-  return {
-    ok: true,
-    data: toUserPublic(user),
-  };
+function ok(data) {
+  return { ok: true, data };
 }
 
-/* ─────────────────────────────
-   UPDATE PROFILE
-───────────────────────────── */
-export function updateProfile(userId, input) {
+export async function getUserById(userId) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("users").select("*").eq("id", userId).maybeSingle();
+  if (error || !data) return err("NOT_FOUND", "User not found.");
+  return ok(userFromDb(data));
+}
+
+export async function updateProfile(userId, input) {
   const validation = validateProfileUpdate(input);
-
   if (!validation.ok) {
-    return {
-      ok: false,
-      error: {
-        code: "VALIDATION_FAILED",
-        message: "Fix the highlighted fields.",
-        fieldErrors: validation.fieldErrors,
-      },
-    };
+    return err("VALIDATION_FAILED", "Fix the highlighted fields.", validation.fieldErrors);
   }
 
-  let updatedUser = null;
+  const snake = keysToSnake(validation.value);
+  snake.updated_at = new Date().toISOString();
 
-  updateDb((db) => {
-    const user = db.users.find((x) => x.id === userId);
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("users").update(snake).eq("id", userId).select().single();
+  if (error || !data) return err("DB_ERROR", error?.message ?? "Update failed.");
 
-    if (!user) return db;
-
-    Object.assign(user, validation.value, {
-      updatedAt: Date.now(),
-    });
-
-    updatedUser = toUserPublic(user);
-    return db;
-  });
-
-  if (!updatedUser) {
-    return {
-      ok: false,
-      error: { code: "NOT_FOUND", message: "User not found." },
-    };
-  }
-
-  return {
-    ok: true,
-    data: updatedUser,
-  };
+  invalidateCache("listings:");
+  return ok(userFromDb(data));
 }

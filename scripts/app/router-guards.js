@@ -1,5 +1,6 @@
 import { ROLES } from "./config.js";
-import { getCurrentUser, initAuthSession } from "../services/auth.service.js";
+import { getCurrentUser } from "./auth-state.js";
+import { initAppState } from "./state.js";
 import { toast } from "./ui.js";
 
 function nextParam() {
@@ -10,8 +11,8 @@ export function redirectToLogin() {
   location.href = `/pages/login.html?next=${nextParam()}`;
 }
 
-export function guardAuth() {
-  initAuthSession();
+export async function guardAuth() {
+  await initAppState();
   const user = getCurrentUser();
   if (!user) {
     redirectToLogin();
@@ -20,8 +21,8 @@ export function guardAuth() {
   return user;
 }
 
-export function guardRole(roles) {
-  const user = guardAuth();
+export async function guardRole(roles) {
+  const user = await guardAuth();
   if (!user) return null;
   if (!roles.includes(user.role)) {
     toast("error", "Access denied.");
@@ -31,7 +32,7 @@ export function guardRole(roles) {
   return user;
 }
 
-export function guardAdmin() {
+export async function guardAdmin() {
   return guardRole([ROLES.admin]);
 }
 

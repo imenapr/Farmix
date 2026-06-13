@@ -1,6 +1,6 @@
 import { boot } from "../app/boot.js";
 import { qs, setText, toast } from "../app/ui.js";
-import { getCurrentUser } from "../services/auth.service.js";
+import { getCurrentUser } from "../app/auth-state.js";
 import { getListingById, updateListing } from "../services/listings.service.js";
 import { CATEGORIES } from "../data/seed.js";
 
@@ -50,7 +50,7 @@ async function initPage() {
     const listing = res.data;
 
     // Check permissions
-    if (user.id !== listing.seller_id && user.role !== "admin") {
+    if (user.id !== listing.sellerId && user.role !== "admin") {
       root.innerHTML = `
         <div class="state-block">
           <h2>Permission denied</h2>
@@ -81,7 +81,7 @@ async function initPage() {
               <label class="form-label" for="category">Category</label>
               <select class="input" id="category" name="categoryId" required>
                 <option value="">Select a category</option>
-                ${CATEGORIES.map((c) => `<option value="${c.id}" ${c.id === listing.category_id ? "selected" : ""}>${c.name}</option>`).join("")}
+                ${CATEGORIES.map((c) => `<option value="${c.id}" ${c.id === listing.categoryId ? "selected" : ""}>${c.name}</option>`).join("")}
               </select>
               <span class="form-error" data-err="categoryId"></span>
             </div>
@@ -112,7 +112,7 @@ async function initPage() {
             <!-- Quantity Available -->
             <div class="form-field">
               <label class="form-label" for="quantity">Quantity available</label>
-              <input class="input" id="quantity" name="quantityAvailable" type="number" inputmode="numeric" min="0" value="${listing.quantity_available || ""}" required />
+              <input class="input" id="quantity" name="quantityAvailable" type="number" inputmode="numeric" min="0" value="${listing.quantityAvailable || ""}" required />
               <span class="form-error" data-err="quantityAvailable"></span>
             </div>
 

@@ -1,337 +1,245 @@
-import { LISTING_STATUS } from "../app/config.js";
-import { supabase } from "../lib/supabase.js";
+import { getSupabase } from "../lib/supabase.js";
+import { getCache, setCache, invalidateCache } from "../lib/cache.js";
+import { listingFromDb, listingToDb } from "../lib/transform.js";
 import { validateListingInput, validateMarketplaceFilters } from "../data/validators.js";
 import { emit } from "../app/events.js";
 
-function now() {
-  return Date.now();
+const LISTINGS_CACHE_PREFIX = "listings:";
+const LISTING_TTL = 60_000;
+const SEARCH_TTL = 45_000;
+
+function err(code, message, fieldErrors) {
+  return { ok: false, error: typeof message === "string" ? { code, message, fieldErrors } : message };
 }
 
-function includesText(haystack = "", needle = "") {
-  return haystack.toLowerCase().includes(String(needle).toLowerCase());
+function ok(data) {
+  return { ok: true, data };
 }
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
-// ─── Get Listing by ID ────────────────────────────────────────────
+async function attachSellerNames(listings) {
+  if (!listings.length) return listings;
+  const supabase = getSupabase();
+  const sellerIds = [...new Set(listings.map((l) => l.sellerId))];
+  const { data: sellers } = await supabase.from("users").select("id,name,location").in("id", sellerIds);
+  const map = Object.fromEntries((sellers ?? []).map((s) => [s.id, s]));
+  return listings.map((l) => ({
+    ...l,
+    sellerName: map[l.sellerId]?.name,
+    sellerLocation: map[l.sellerId]?.location,
+  }));
+}
+
 export async function getListingById(listingId) {
-  try {
-    const { data, error } = await supabase
-      .from("listings")
-      .select("*")
-      .eq("id", listingId)
-      .single();
+  const cacheKey = `${LISTINGS_CACHE_PREFIX}id:${listingId}`;
+  const cached = getCache(cacheKey);
+  if (cached) return ok(cached);
 
-    if (error || !data) {
-      return { ok: false, error: error?.message || "Listing not found" };
-    }
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("listings").select("*").eq("id", listingId).maybeSingle();
+  if (error || !data) return err("NOT_FOUND", "Listing not found");
 
-    return { ok: true, data };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
+  let listing = listingFromDb(data);
+  [listing] = await attachSellerNames([listing]);
+  setCache(cacheKey, listing, LISTING_TTL);
+  return ok(listing);
 }
 
-// ─── Increment Listing View ───────────────────────────────────────
 export async function incrementListingView(listingId) {
-  try {
-    const { data, error } = await supabase
-      .from("listings")
-      .select("views")
-      .eq("id", listingId)
-      .single();
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("listings").select("view_count").eq("id", listingId).maybeSingle();
+  if (error || !data) return err("NOT_FOUND", "Listing not found");
 
-    if (error || !data) return { ok: false, error: "Listing not found" };
+  const newViews = (data.view_count ?? 0) + 1;
+  const { error: updateError } = await supabase
+    .from("listings")
+    .update({ view_count: newViews, updated_at: new Date().toISOString() })
+    .eq("id", listingId);
 
-    const newViews = (data.views || 0) + 1;
+  if (updateError) return err("DB_ERROR", updateError.message);
 
-    const { error: updateError } = await supabase
-      .from("listings")
-      .update({ views: newViews, updated_at: now() })
-      .eq("id", listingId);
-
-    if (updateError) {
-      return { ok: false, error: updateError.message };
-    }
-
-    emit("listing:view", { listingId, views: newViews });
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
+  invalidateCache(`${LISTINGS_CACHE_PREFIX}id:${listingId}`);
+  emit("listing:view", { listingId, views: newViews });
+  return ok({ views: newViews });
 }
 
-// ─── Search/Filter Listings ──────────────────────────────────────
 export async function searchListings(filters = new URLSearchParams()) {
-  try {
-    const parsed = validateMarketplaceFilters(filters);
-    if (!parsed.ok) {
-      return { ok: false, error: parsed.fieldErrors };
-    }
+  const cacheKey = `${LISTINGS_CACHE_PREFIX}search:${filters.toString()}`;
+  const cached = getCache(cacheKey);
+  if (cached) return ok(cached);
 
-    const f = parsed.value;
-    let query = supabase
-      .from("listings")
-      .select("*")
-      .eq("status", "active")
-      .order("created_at", { ascending: false });
+  const parsed = validateMarketplaceFilters(filters);
+  if (!parsed.ok) return err("VALIDATION_FAILED", "Invalid filters", parsed.fieldErrors);
 
-    // Search text
-    if (f.q) {
-      query = query.or(`title.ilike.%${f.q}%,description.ilike.%${f.q}%`);
-    }
+  const f = parsed.value;
+  const supabase = getSupabase();
+  let query = supabase.from("listings").select("*").eq("status", "active");
 
-    // Category
-    if (f.cat) {
-      query = query.eq("category_id", f.cat);
-    }
+  if (f.q) query = query.or(`title.ilike.%${f.q}%,description.ilike.%${f.q}%`);
+  if (f.cat) query = query.eq("category_id", f.cat);
+  if (f.loc) query = query.ilike("location", `%${f.loc}%`);
+  if (f.min != null) query = query.gte("price", Number(f.min));
+  if (f.max != null) query = query.lte("price", Number(f.max));
 
-    // Location
-    if (f.loc) {
-      query = query.ilike("location", `%${f.loc}%`);
-    }
+  const { data, error } = await query;
+  if (error) return err("DB_ERROR", error.message);
 
-    // Price range
-    if (f.min != null) {
-      query = query.gte("price", Number(f.min));
-    }
-    if (f.max != null) {
-      query = query.lte("price", Number(f.max));
-    }
+  let items = (data ?? []).map(listingFromDb);
 
-    // Get all matching records (we'll paginate client-side for now)
-    const { data, error, count } = await query;
-
-    if (error) {
-      return { ok: false, error: error.message };
-    }
-
-    let items = data || [];
-
-    // Sorting
-    switch (f.sort) {
-      case "price_asc":
-        items.sort((a, b) => a.price - b.price);
-        break;
-      case "price_desc":
-        items.sort((a, b) => b.price - a.price);
-        break;
-      default:
-        items.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
-    }
-
-    // Pagination
-    const pageSize = 9;
-    const page = clamp(Number(f.page || 1), 1, 999);
-    const start = (page - 1) * pageSize;
-    const paginated = items.slice(start, start + pageSize);
-
-    return {
-      ok: true,
-      data: {
-        items: paginated,
-        total: items.length,
-        page,
-        pageSize,
-        filters: f,
-      },
-    };
-  } catch (err) {
-    return { ok: false, error: err.message };
+  switch (f.sort) {
+    case "price_asc":
+      items.sort((a, b) => a.price - b.price);
+      break;
+    case "price_desc":
+      items.sort((a, b) => b.price - a.price);
+      break;
+    default:
+      items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
+
+  const pageSize = 9;
+  const page = clamp(Number(f.page || 1), 1, 999);
+  const start = (page - 1) * pageSize;
+  const paginated = items.slice(start, start + pageSize);
+  paginated.forEach((l) => setCache(`${LISTINGS_CACHE_PREFIX}id:${l.id}`, l, LISTING_TTL));
+
+  const result = {
+    items: paginated,
+    total: items.length,
+    page,
+    pageSize,
+    filters: f,
+  };
+
+  setCache(cacheKey, result, SEARCH_TTL);
+  return ok(result);
 }
 
-// ─── Get User's Listings ─────────────────────────────────────────
 export async function getUserListings(userId) {
-  try {
-    const { data, error } = await supabase
-      .from("listings")
-      .select("*")
-      .eq("seller_id", userId)
-      .order("created_at", { ascending: false });
+  const cacheKey = `${LISTINGS_CACHE_PREFIX}seller:${userId}`;
+  const cached = getCache(cacheKey);
+  if (cached) return ok(cached);
 
-    if (error) {
-      return { ok: false, error: error.message };
-    }
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("listings")
+    .select("*")
+    .eq("seller_id", userId)
+    .neq("status", "archived")
+    .order("created_at", { ascending: false });
 
-    return { ok: true, data: data || [] };
-  } catch (err) {
-    return { ok: false, error: err.message };
-  }
+  if (error) return err("DB_ERROR", error.message);
+
+  const items = (data ?? []).map(listingFromDb);
+  setCache(cacheKey, items, LISTING_TTL);
+  return ok(items);
 }
 
-// ─── Create Listing ──────────────────────────────────────────────
+/** @deprecated alias */
+export const listSellerListings = getUserListings;
+
 export async function createListing(input, sellerId) {
-  try {
-    const v = validateListingInput(input);
-    if (!v.ok) {
-      return {
-        ok: false,
-        error: { code: "VALIDATION_FAILED", message: "Fix the highlighted fields.", fieldErrors: v.fieldErrors },
-      };
-    }
+  const v = validateListingInput(input);
+  if (!v.ok) return err("VALIDATION_FAILED", "Fix the highlighted fields.", v.fieldErrors);
 
-    const { title, description, categoryId, price, unit, quantityAvailable, location, images } = v.value;
+  const supabase = getSupabase();
+  const payload = {
+    ...listingToDb(v.value),
+    seller_id: sellerId,
+    status: "active",
+    view_count: 0,
+    created_at: new Date().toISOString(),
+  };
 
-    const { data, error } = await supabase
-      .from("listings")
-      .insert({
-        seller_id: sellerId,
-        title,
-        description,
-        category_id: categoryId,
-        price: Number(price),
-        unit,
-        quantity_available: Number(quantityAvailable),
-        location,
-        images: Array.isArray(images) ? images : [],
-        status: "active",
-        created_at: now(),
-        updated_at: now(),
-      })
-      .select()
-      .single();
+  const { data, error } = await supabase.from("listings").insert(payload).select().single();
+  if (error) return err("DB_ERROR", error.message);
 
-    if (error) {
-      return { ok: false, error: { code: "DB_ERROR", message: error.message } };
-    }
-
-    emit("listing:created", { listing: data });
-    return { ok: true, data };
-  } catch (err) {
-    return { ok: false, error: { code: "ERROR", message: err.message } };
-  }
+  invalidateCache(LISTINGS_CACHE_PREFIX);
+  const listing = listingFromDb(data);
+  emit("listing:created", { listing });
+  return ok(listing);
 }
 
-// ─── Update Listing (owner or admin) ──────────────────────────────
 export async function updateListing(listingId, input, userId, userRole) {
-  try {
-    // Check ownership
-    const { data: listing, error: fetchError } = await supabase
-      .from("listings")
-      .select("seller_id")
-      .eq("id", listingId)
-      .single();
+  const supabase = getSupabase();
+  const { data: existing, error: fetchError } = await supabase
+    .from("listings")
+    .select("seller_id")
+    .eq("id", listingId)
+    .maybeSingle();
 
-    if (fetchError || !listing) {
-      return { ok: false, error: "Listing not found" };
-    }
-
-    const isOwner = listing.seller_id === userId;
-    const isAdmin = userRole === "admin";
-
-    if (!isOwner && !isAdmin) {
-      return { ok: false, error: "You don't have permission to edit this listing" };
-    }
-
-    const v = validateListingInput(input);
-    if (!v.ok) {
-      return {
-        ok: false,
-        error: { code: "VALIDATION_FAILED", message: "Fix the highlighted fields.", fieldErrors: v.fieldErrors },
-      };
-    }
-
-    const { title, description, categoryId, price, unit, quantityAvailable, location, images } = v.value;
-
-    const { data, error } = await supabase
-      .from("listings")
-      .update({
-        title,
-        description,
-        category_id: categoryId,
-        price: Number(price),
-        unit,
-        quantity_available: Number(quantityAvailable),
-        location,
-        images: Array.isArray(images) ? images : [],
-        updated_at: now(),
-      })
-      .eq("id", listingId)
-      .select()
-      .single();
-
-    if (error) {
-      return { ok: false, error: error.message };
-    }
-
-    emit("listing:updated", { listing: data });
-    return { ok: true, data };
-  } catch (err) {
-    return { ok: false, error: err.message };
+  if (fetchError || !existing) return err("NOT_FOUND", "Listing not found");
+  if (existing.seller_id !== userId && userRole !== "admin") {
+    return err("FORBIDDEN", "You don't have permission to edit this listing");
   }
+
+  const v = validateListingInput(input);
+  if (!v.ok) return err("VALIDATION_FAILED", "Fix the highlighted fields.", v.fieldErrors);
+
+  const { data, error } = await supabase
+    .from("listings")
+    .update(listingToDb(v.value))
+    .eq("id", listingId)
+    .select()
+    .single();
+
+  if (error) return err("DB_ERROR", error.message);
+
+  invalidateCache(LISTINGS_CACHE_PREFIX);
+  const listing = listingFromDb(data);
+  emit("listing:updated", { listing });
+  return ok(listing);
 }
 
-// ─── Delete/Archive Listing (owner or admin) ────────────────────
 export async function archiveListingAsOwnerOrAdmin(listingId, userId, userRole) {
-  try {
-    const { data: listing, error: fetchError } = await supabase
-      .from("listings")
-      .select("seller_id")
-      .eq("id", listingId)
-      .single();
+  const supabase = getSupabase();
+  const { data: existing, error: fetchError } = await supabase
+    .from("listings")
+    .select("seller_id")
+    .eq("id", listingId)
+    .maybeSingle();
 
-    if (fetchError || !listing) {
-      return { ok: false, error: "Listing not found" };
-    }
-
-    const isOwner = listing.seller_id === userId;
-    const isAdmin = userRole === "admin";
-
-    if (!isOwner && !isAdmin) {
-      return { ok: false, error: "You don't have permission to delete this listing" };
-    }
-
-    const { error } = await supabase
-      .from("listings")
-      .update({ status: "archived", updated_at: now() })
-      .eq("id", listingId);
-
-    if (error) {
-      return { ok: false, error: error.message };
-    }
-
-    emit("listing:archived", { listingId });
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
+  if (fetchError || !existing) return err("NOT_FOUND", "Listing not found");
+  if (existing.seller_id !== userId && userRole !== "admin") {
+    return err("FORBIDDEN", "You don't have permission to delete this listing");
   }
+
+  const { error } = await supabase
+    .from("listings")
+    .update({ status: "archived", updated_at: new Date().toISOString() })
+    .eq("id", listingId);
+
+  if (error) return err("DB_ERROR", error.message);
+
+  invalidateCache(LISTINGS_CACHE_PREFIX);
+  emit("listing:archived", { listingId });
+  return ok(null);
 }
 
-// ─── Mark as Sold ─────────────────────────────────────────────────
 export async function markListingAsSold(listingId, userId, userRole) {
-  try {
-    const { data: listing, error: fetchError } = await supabase
-      .from("listings")
-      .select("seller_id")
-      .eq("id", listingId)
-      .single();
+  const supabase = getSupabase();
+  const { data: existing, error: fetchError } = await supabase
+    .from("listings")
+    .select("seller_id")
+    .eq("id", listingId)
+    .maybeSingle();
 
-    if (fetchError || !listing) {
-      return { ok: false, error: "Listing not found" };
-    }
-
-    const isOwner = listing.seller_id === userId;
-    const isAdmin = userRole === "admin";
-
-    if (!isOwner && !isAdmin) {
-      return { ok: false, error: "You don't have permission" };
-    }
-
-    const { error } = await supabase
-      .from("listings")
-      .update({ status: "sold", updated_at: now() })
-      .eq("id", listingId);
-
-    if (error) {
-      return { ok: false, error: error.message };
-    }
-
-    emit("listing:sold", { listingId });
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
+  if (fetchError || !existing) return err("NOT_FOUND", "Listing not found");
+  if (existing.seller_id !== userId && userRole !== "admin") {
+    return err("FORBIDDEN", "You don't have permission");
   }
+
+  const { error } = await supabase
+    .from("listings")
+    .update({ status: "sold", updated_at: new Date().toISOString() })
+    .eq("id", listingId);
+
+  if (error) return err("DB_ERROR", error.message);
+
+  invalidateCache(LISTINGS_CACHE_PREFIX);
+  emit("listing:sold", { listingId });
+  return ok(null);
 }

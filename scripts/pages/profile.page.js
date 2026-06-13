@@ -1,7 +1,7 @@
 import { boot } from "../app/boot.js";
 import { escapeHtml, renderSkeletonCards, renderStateBlock, qs } from "../app/ui.js";
 import { getUserById } from "../services/users.service.js";
-import { listSellerListings } from "../services/listings.service.js";
+import { getUserListings } from "../app/state.js";
 import { renderListingCard } from "../components/listing-card.js";
 
 boot();
@@ -33,8 +33,7 @@ if (root) {
     head.innerHTML = renderStateBlock({ title: "Loading profile…", description: "Please wait." });
     listingsMount.innerHTML = renderSkeletonCards(6);
 
-    window.setTimeout(() => {
-      const u = getUserById(id);
+    Promise.all([getUserById(id), getUserListings(id)]).then(([u, l]) => {
       if (!u.ok) {
         root.innerHTML = renderStateBlock({
           title: "Profile not found",
@@ -57,11 +56,10 @@ if (root) {
         ${user.bio ? `<p class="muted" style="margin:0.6rem 0 0; white-space:pre-wrap;">${escapeHtml(user.bio)}</p>` : ""}
       `;
 
-      const l = listSellerListings(user.id, { includeArchived: false });
       if (!l.ok) {
         listingsMount.innerHTML = renderStateBlock({
-          title: "Couldn’t load listings",
-          description: l.error.message ?? "Please try again.",
+          title: "Couldn't load listings",
+          description: l.error?.message ?? "Please try again.",
           actionsHtml: `<a class="btn btn-primary" href="/pages/marketplace.html">Back</a>`,
         });
         return;
@@ -70,13 +68,12 @@ if (root) {
       if (!l.data.length) {
         listingsMount.innerHTML = renderStateBlock({
           title: "No active listings",
-          description: "This seller doesn’t have active listings right now.",
+          description: "This seller doesn't have active listings right now.",
         });
         return;
       }
 
       listingsMount.innerHTML = `<div class="grid cols-3">${l.data.map((x) => renderListingCard(x)).join("")}</div>`;
-    }, 240);
+    });
   }
 }
-

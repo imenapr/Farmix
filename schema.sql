@@ -20,7 +20,9 @@ CREATE TABLE IF NOT EXISTS public.users (
   farm_name text,
   company_name text,
   location text NOT NULL,
+  bio text,
   avatar_url text,
+  verified boolean NOT NULL DEFAULT false,
   suspended boolean NOT NULL DEFAULT false,
   created_at timestamp with time zone NOT NULL DEFAULT (now() at time zone 'utc'),
   updated_at timestamp with time zone NOT NULL DEFAULT (now() at time zone 'utc')
@@ -35,15 +37,19 @@ CREATE TABLE IF NOT EXISTS public.listings (
   seller_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   title text NOT NULL,
   description text NOT NULL,
+  category_id text NOT NULL DEFAULT 'other',
   price numeric(12, 2) NOT NULL,
-  quantity integer DEFAULT 1,
-  unit text,
+  quantity_available integer NOT NULL DEFAULT 1,
+  unit text NOT NULL DEFAULT 'other',
+  location text NOT NULL DEFAULT '',
+  images jsonb NOT NULL DEFAULT '[]'::jsonb,
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'sold')),
-  view_count integer DEFAULT 0,
+  view_count integer NOT NULL DEFAULT 0,
+  metadata jsonb,
   created_at timestamp with time zone NOT NULL DEFAULT (now() at time zone 'utc'),
   updated_at timestamp with time zone NOT NULL DEFAULT (now() at time zone 'utc'),
   CONSTRAINT price_positive CHECK (price > 0),
-  CONSTRAINT quantity_positive CHECK (quantity > 0)
+  CONSTRAINT quantity_positive CHECK (quantity_available > 0)
 );
 
 -- ============================================================================
@@ -74,7 +80,9 @@ CREATE TABLE IF NOT EXISTS public.messages (
   id uuid NOT NULL PRIMARY KEY DEFAULT uuid_generate_v4(),
   sender_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   recipient_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  listing_id uuid REFERENCES public.listings(id) ON DELETE SET NULL,
   content text NOT NULL,
+  metadata jsonb,
   read_at timestamp with time zone,
   created_at timestamp with time zone NOT NULL DEFAULT (now() at time zone 'utc'),
   CONSTRAINT different_users CHECK (sender_id != recipient_id)
@@ -111,6 +119,7 @@ CREATE TABLE IF NOT EXISTS public.favorites (
 -- INDEXES FOR PERFORMANCE
 -- ============================================================================
 
+CREATE INDEX idx_listings_category_id ON public.listings(category_id);
 CREATE INDEX idx_listings_seller_id ON public.listings(seller_id);
 CREATE INDEX idx_listings_status ON public.listings(status);
 CREATE INDEX idx_orders_buyer_id ON public.orders(buyer_id);
@@ -334,3 +343,18 @@ CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON public.orders
 --   ('550e8400-e29b-41d4-a716-446655440001'::uuid, 'farmer@farmix.local', 'Farmer User', '+1-555-0101', 'farmer', 'Tbilisi', now(), now()),
 --   ('550e8400-e29b-41d4-a716-446655440002'::uuid, 'business@farmix.local', 'Business User', '+1-555-0102', 'business', 'Tbilisi', now(), now()),
 --   ('550e8400-e29b-41d4-a716-446655440003'::uuid, 'consumer@farmix.local', 'Consumer User', '+1-555-0103', 'consumer', 'Tbilisi', now(), now());
+
+-- ============================================================================
+-- MIGRATION (existing Supabase projects — run once if tables already exist)
+-- ============================================================================
+
+-- ALTER TABLE public.users ADD COLUMN IF NOT EXISTS bio text;
+-- ALTER TABLE public.users ADD COLUMN IF NOT EXISTS verified boolean NOT NULL DEFAULT false;
+-- ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS category_id text NOT NULL DEFAULT 'other';
+-- ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS location text NOT NULL DEFAULT '';
+-- ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS images jsonb NOT NULL DEFAULT '[]'::jsonb;
+-- ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS metadata jsonb;
+-- ALTER TABLE public.listings RENAME COLUMN quantity TO quantity_available; -- if old column name
+-- ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS listing_id uuid REFERENCES public.listings(id) ON DELETE SET NULL;
+-- ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS metadata jsonb;
+-- CREATE INDEX IF NOT EXISTS idx_listings_category_id ON public.listings(category_id);

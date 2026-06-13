@@ -1,10 +1,10 @@
 import { boot } from "../app/boot.js";
 import { debounce, renderSkeletonCards, renderStateBlock, toast, qs } from "../app/ui.js";
-import { getCurrentUser } from "../services/auth.service.js";
+import { getCurrentUser } from "../app/auth-state.js";
+import { searchListings } from "../app/state.js";
 import { CATEGORIES as SEED_CATEGORIES } from "../data/seed.js";
 import { ROLES } from "../app/config.js";
 import { validateMarketplaceFilters } from "../data/validators.js";
-import { searchListings } from "../services/listings.service.js";
 import { renderListingCard } from "../components/listing-card.js";
 import { placeOrder } from "../services/orders.service.js";
 import { openGuestGate } from "../components/guest-gate.js";
@@ -350,6 +350,7 @@ if (root) {
       }
 
       resultsEl.innerHTML = `<div class="grid cols-3">${items.map((l) => renderListingCard(l)).join("")}</div>`;
+      injectOrderButtons(items);
       renderPager({
         page,
         pageSize,
@@ -430,7 +431,7 @@ if (root) {
   document.getElementById("om-cancel").addEventListener("click", () => { orderModal.style.display = "none"; });
   orderModal.addEventListener("click", (e) => { if (e.target === orderModal) orderModal.style.display = "none"; });
 
-  document.getElementById("om-confirm").addEventListener("click", () => {
+  document.getElementById("om-confirm").addEventListener("click", async () => {
     const qty = parseInt(document.getElementById("om-qty").value) || 1;
     const curUser = getCurrentUser();
     if (!curUser) {
@@ -442,7 +443,7 @@ if (root) {
     btn.disabled = true;
     btn.textContent = "Placing…";
 
-    const result = placeOrder(curUser.id, omListingId, qty);
+    const result = await placeOrder(curUser.id, omListingId, qty);
     btn.disabled = false;
     btn.textContent = "Confirm Order";
 
@@ -503,10 +504,26 @@ if (root) {
     });
   }
 
-  // Optional: Keep the submit button for manual apply
-  form.addEventListener(“submit”, (e) => {
+  function applyFiltersFromForm() {
+    const fd = new FormData(form);
+    setQueryParams({
+      q: fd.get("q"),
+      cat: fd.get("cat"),
+      loc: fd.get("loc"),
+      min: fd.get("min"),
+      max: fd.get("max"),
+      sort: fd.get("sort"),
+      page: 1,
+    });
+    render();
+  }
+
+  const applyFiltersDebounced = debounce(applyFiltersFromForm, 400);
+  qInput.addEventListener("input", applyFiltersDebounced);
+
+  form.addEventListener("submit", (e) => {
     e.preventDefault();
-    applyFiltersDebounced();
+    applyFiltersFromForm();
   });
 
   resetBtn.addEventListener("click", () => {

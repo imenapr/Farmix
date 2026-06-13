@@ -1,38 +1,15 @@
-import { seedDbV1 } from "../data/seed.js";
-
-let DB = seedDbV1({
-  version: 1,
-  seededAt: Date.now(),
-});
-
-/* ─────────────────────────────
-   READ ACCESS
-───────────────────────────── */
+/**
+ * @deprecated Legacy in-memory DB removed. Use services + Supabase via scripts/app/state.js.
+ * This module remains only to surface a clear error if imported accidentally.
+ */
 export function getDb() {
-  return DB;
+  throw new Error("db.provider.js is deprecated. Use Supabase services via scripts/app/state.js.");
 }
 
-/* ─────────────────────────────
-   WRITE ACCESS (TRANSACTION STYLE)
-───────────────────────────── */
-export function updateDb(mutator) {
-  const next = structuredClone(DB);
-  const result = mutator(next);
-
-  // allow mutator to either return DB or modify clone
-  DB = result ?? next;
-
-  return DB;
+export function updateDb() {
+  throw new Error("db.provider.js is deprecated. Use Supabase services via scripts/app/state.js.");
 }
 
-/* ─────────────────────────────
-   OPTIONAL RESET (useful for dev/admin tools)
-───────────────────────────── */
 export function resetDb() {
-  DB = seedDbV1({
-    version: 1,
-    seededAt: Date.now(),
-  });
-
-  return DB;
+  throw new Error("db.provider.js is deprecated. Use Supabase services via scripts/app/state.js.");
 }

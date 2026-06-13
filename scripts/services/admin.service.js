@@ -1,233 +1,176 @@
 import { ROLES } from "../app/config.js";
 import { getCurrentUser } from "./auth.service.js";
-import { getDb, updateDb } from "../services/db.provider.js";
+import { getSupabase } from "../lib/supabase.js";
+import { userFromDb, listingFromDb, keysToCamel } from "../lib/transform.js";
 import { archiveListingAsOwnerOrAdmin } from "./listings.service.js";
+import { invalidateCache } from "../lib/cache.js";
 
-function now() {
-  return Date.now();
+function err(code, message) {
+  return { ok: false, error: { code, message } };
 }
 
-function toUserPublic(u) {
-  const { passwordHash, ...rest } = u;
-  return rest;
+function ok(data) {
+  return { ok: true, data };
 }
 
-/* ─────────────────────────────
-   AUTH GUARD
-───────────────────────────── */
 export function requireAdmin() {
   const u = getCurrentUser();
-
-  if (!u) {
-    return { ok: false, error: { code: "AUTH_REQUIRED", message: "Login required." } };
-  }
-
-  if (u.role !== ROLES.admin) {
-    return { ok: false, error: { code: "FORBIDDEN", message: "Admin access only." } };
-  }
-
-  return { ok: true, data: { user: u } };
+  if (!u) return err("AUTH_REQUIRED", "Login required.");
+  if (u.role !== ROLES.admin) return err("FORBIDDEN", "Admin access only.");
+  return ok({ user: u });
 }
 
-/* ─────────────────────────────
-   SYSTEM STATS
-───────────────────────────── */
-export function getSystemStats() {
+export async function getSystemStats() {
   const guard = requireAdmin();
   if (!guard.ok) return guard;
 
-  const db = getDb();
+  const supabase = getSupabase();
+  const [usersRes, listingsRes, messagesRes] = await Promise.all([
+    supabase.from("users").select("id, role, suspended", { count: "exact" }),
+    supabase.from("listings").select("id, status", { count: "exact" }),
+    supabase.from("messages").select("id", { count: "exact", head: true }),
+  ]);
 
-  const totalUsers = db.users.length;
-  const activeListings = db.listings.filter((l) => l.status === "active").length;
-  const suspendedUsers = db.users.filter((u) => u.suspended).length;
+  const users = usersRes.data ?? [];
+  const listings = listingsRes.data ?? [];
 
-  const farmerCount = db.users.filter((u) => u.role === ROLES.farmer).length;
-  const businessCount = db.users.filter((u) => u.role === ROLES.business).length;
-  const consumerCount = db.users.filter((u) => u.role === ROLES.consumer).length;
-
-  const totalMessages = db.messages?.length ?? 0;
-
-  return {
-    ok: true,
-    data: {
-      totalUsers,
-      activeListings,
-      suspendedUsers,
-      farmerCount,
-      businessCount,
-      consumerCount,
-      totalMessages,
-    },
-  };
-}
-
-/* ─────────────────────────────
-   USERS
-───────────────────────────── */
-export function listUsers() {
-  const guard = requireAdmin();
-  if (!guard.ok) return guard;
-
-  const db = getDb();
-  return { ok: true, data: db.users.map(toUserPublic) };
-}
-
-export function suspendUser(userId) {
-  const guard = requireAdmin();
-  if (!guard.ok) return guard;
-
-  let updatedUser = null;
-
-  updateDb((db) => {
-    const u = db.users.find((x) => x.id === userId);
-    if (!u) return db;
-
-    u.suspended = true;
-    u.updatedAt = now();
-
-    updatedUser = toUserPublic(u);
-    return db;
+  return ok({
+    totalUsers: users.length,
+    activeListings: listings.filter((l) => l.status === "active").length,
+    suspendedUsers: users.filter((u) => u.suspended).length,
+    farmerCount: users.filter((u) => u.role === ROLES.farmer).length,
+    businessCount: users.filter((u) => u.role === ROLES.business).length,
+    consumerCount: users.filter((u) => u.role === ROLES.consumer).length,
+    totalMessages: messagesRes.count ?? 0,
   });
-
-  if (!updatedUser) {
-    return { ok: false, error: { code: "NOT_FOUND", message: "User not found." } };
-  }
-
-  return { ok: true, data: updatedUser };
 }
 
-export function activateUser(userId) {
+export async function listUsers() {
   const guard = requireAdmin();
   if (!guard.ok) return guard;
 
-  let updatedUser = null;
-
-  updateDb((db) => {
-    const u = db.users.find((x) => x.id === userId);
-    if (!u) return db;
-
-    u.suspended = false;
-    u.updatedAt = now();
-
-    updatedUser = toUserPublic(u);
-    return db;
-  });
-
-  if (!updatedUser) {
-    return { ok: false, error: { code: "NOT_FOUND", message: "User not found." } };
-  }
-
-  return { ok: true, data: updatedUser };
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("users").select("*").order("created_at", { ascending: false });
+  if (error) return err("DB_ERROR", error.message);
+  return ok((data ?? []).map(userFromDb));
 }
 
-export function changeUserRole(userId, newRole) {
+export async function suspendUser(userId) {
+  const guard = requireAdmin();
+  if (!guard.ok) return guard;
+  return updateUserFlag(userId, { suspended: true });
+}
+
+export async function activateUser(userId) {
+  const guard = requireAdmin();
+  if (!guard.ok) return guard;
+  return updateUserFlag(userId, { suspended: false });
+}
+
+async function updateUserFlag(userId, patch) {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("users")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", userId)
+    .select()
+    .single();
+
+  if (error || !data) return err("NOT_FOUND", "User not found.");
+  return ok(userFromDb(data));
+}
+
+export async function changeUserRole(userId, newRole) {
+  const guard = requireAdmin();
+  if (!guard.ok) return guard;
+  if (!Object.values(ROLES).includes(newRole)) return err("INVALID_ROLE", "Invalid role.");
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("users")
+    .update({ role: newRole, updated_at: new Date().toISOString() })
+    .eq("id", userId)
+    .select()
+    .single();
+
+  if (error || !data) return err("NOT_FOUND", "User not found.");
+  return ok(userFromDb(data));
+}
+
+export async function verifyFarmer(userId) {
   const guard = requireAdmin();
   if (!guard.ok) return guard;
 
-  if (!Object.values(ROLES).includes(newRole)) {
-    return { ok: false, error: { code: "INVALID_ROLE", message: "Invalid role." } };
-  }
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("users")
+    .update({ verified: true, updated_at: new Date().toISOString() })
+    .eq("id", userId)
+    .eq("role", ROLES.farmer)
+    .select()
+    .single();
 
-  let updatedUser = null;
-
-  updateDb((db) => {
-    const u = db.users.find((x) => x.id === userId);
-    if (!u) return db;
-
-    u.role = newRole;
-    u.updatedAt = now();
-
-    updatedUser = toUserPublic(u);
-    return db;
-  });
-
-  if (!updatedUser) {
-    return { ok: false, error: { code: "NOT_FOUND", message: "User not found." } };
-  }
-
-  return { ok: true, data: updatedUser };
+  if (error || !data) return err("NOT_FOUND", "Farmer not found.");
+  return ok(userFromDb(data));
 }
 
-export function verifyFarmer(userId) {
+export async function listListings(opts = { includeArchived: true }) {
   const guard = requireAdmin();
   if (!guard.ok) return guard;
 
-  let updatedUser = null;
+  const supabase = getSupabase();
+  let query = supabase.from("listings").select("*").order("created_at", { ascending: false });
+  if (!opts.includeArchived) query = query.neq("status", "archived");
 
-  updateDb((db) => {
-    const u = db.users.find((x) => x.id === userId);
+  const { data, error } = await query;
+  if (error) return err("DB_ERROR", error.message);
 
-    if (!u || u.role !== ROLES.farmer) return db;
+  const listings = (data ?? []).map(listingFromDb);
+  const sellerIds = [...new Set(listings.map((l) => l.sellerId))];
+  const { data: sellers } = await supabase.from("users").select("id,name").in("id", sellerIds);
+  const nameMap = Object.fromEntries((sellers ?? []).map((s) => [s.id, s.name]));
 
-    u.verified = true;
-    u.updatedAt = now();
-
-    updatedUser = toUserPublic(u);
-    return db;
-  });
-
-  if (!updatedUser) {
-    return { ok: false, error: { code: "NOT_FOUND", message: "Farmer not found." } };
-  }
-
-  return { ok: true, data: updatedUser };
+  return ok(listings.map((l) => ({ ...l, sellerName: nameMap[l.sellerId] ?? "Unknown" })));
 }
 
-/* ─────────────────────────────
-   LISTINGS (ADMIN VIEW)
-───────────────────────────── */
-export function listListings(opts = { includeArchived: true }) {
+export async function takeDownListing(listingId, reason = "") {
   const guard = requireAdmin();
   if (!guard.ok) return guard;
 
-  const db = getDb();
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("listings")
+    .update({
+      status: "archived",
+      updated_at: new Date().toISOString(),
+      metadata: reason ? { takenDownReason: String(reason).slice(0, 500) } : null,
+    })
+    .eq("id", listingId)
+    .select()
+    .single();
 
-  const userMap = Object.fromEntries(
-    db.users.map((u) => [u.id, u.name ?? u.email])
-  );
-
-  const items = db.listings
-    .filter((l) => (opts.includeArchived ? true : l.status !== "archived"))
-    .slice()
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .map((l) => ({
-      ...l,
-      sellerName: userMap[l.sellerId] ?? "Unknown",
-    }));
-
-  return { ok: true, data: items };
+  if (error || !data) return err("NOT_FOUND", "Listing not found.");
+  invalidateCache("listings:");
+  return ok(listingFromDb(data));
 }
 
-export function takeDownListing(listingId, reason = "") {
+export async function archiveListingAsAdmin(listingId) {
+  const guard = requireAdmin();
+  if (!guard.ok) return guard;
+  const user = guard.data.user;
+  return archiveListingAsOwnerOrAdmin(listingId, user.id, user.role);
+}
+
+export async function listOrdersSummary() {
   const guard = requireAdmin();
   if (!guard.ok) return guard;
 
-  let result = null;
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("orders")
+    .select("status, total_price, created_at")
+    .order("created_at", { ascending: true });
 
-  updateDb((db) => {
-    const l = db.listings.find((x) => x.id === listingId);
-    if (!l) return db;
-
-    l.status = "archived";
-    l.takenDownAt = now();
-    if (reason) l.takenDownReason = String(reason).slice(0, 500);
-    l.updatedAt = now();
-
-    result = l;
-    return db;
-  });
-
-  if (!result) {
-    return { ok: false, error: { code: "NOT_FOUND", message: "Listing not found." } };
-  }
-
-  return { ok: true, data: result };
-}
-
-export function archiveListingAsAdmin(listingId) {
-  const guard = requireAdmin();
-  if (!guard.ok) return guard;
-
-  return archiveListingAsOwnerOrAdmin(listingId);
+  if (error) return err("DB_ERROR", error.message);
+  return ok((data ?? []).map(keysToCamel));
 }

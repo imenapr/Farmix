@@ -2,7 +2,7 @@ import { initToasts } from "../components/toast.js";
 import { mountNavbar } from "../components/navbar.js";
 import { mountFooter } from "../components/footer.js";
 import { mountGuestActionGates } from "../components/guest-gate.js";
-import { initAuthSession, watchSession } from "../services/auth.service.js";
+import { initAppState } from "./state.js";
 import { initTheme } from "./theme.js";
 
 function ensureGlobalDesignSystem() {
@@ -94,9 +94,8 @@ export function boot() {
 
   // Defer auth initialization to not block page render
   // This happens in background without blocking UI
-  Promise.resolve().then(() => {
-    initAuthSession();
+  Promise.resolve().then(async () => {
+    await initAppState();
     mountGuestActionGates();
-    watchSession();
   });
 }
