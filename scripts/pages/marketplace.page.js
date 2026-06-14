@@ -296,15 +296,16 @@ if (root) {
   // ── Order modal (injected once) ─────────────────────────────────────
   const orderModal = document.createElement("div");
   orderModal.className = "order-modal-backdrop";
+  orderModal.setAttribute("aria-hidden", "true");
   orderModal.style.display = "none";
   orderModal.innerHTML = `
-    <div class="order-modal-card">
+    <div class="order-modal-card" role="dialog" aria-modal="true" aria-labelledby="om-title" aria-describedby="om-meta" tabindex="-1">
       <h3 class="order-modal-title" id="om-title">Order product</h3>
       <p class="order-modal-meta" id="om-meta"></p>
       <div class="order-modal-row">
         <div class="order-modal-field">
           <label for="om-qty">Quantity</label>
-          <input class="order-qty-input" id="om-qty" type="number" min="1" value="1" />
+          <input class="order-qty-input" id="om-qty" type="number" min="1" step="1" value="1" aria-describedby="om-avail" />
         </div>
         <div class="order-modal-field">
           <label>Available</label>
@@ -314,14 +315,15 @@ if (root) {
       <div class="order-modal-total-label">Total</div>
       <div class="order-modal-total-val" id="om-total">$0.00</div>
       <div class="order-modal-actions">
-        <button class="btn btn-ghost" id="om-cancel">Cancel</button>
-        <button class="btn btn-primary" id="om-confirm">Confirm Order</button>
+        <button class="btn btn-ghost" id="om-cancel" type="button">Cancel</button>
+        <button class="btn btn-primary" id="om-confirm" type="button">Confirm Order</button>
       </div>
     </div>
   `;
   document.body.appendChild(orderModal);
 
   let omListingId = null, omPricePerUnit = 0, omMaxQty = 0, omUnit = "";
+  let lastOrderTrigger = null;
 
   function updateOrderTotal() {
     const qty = Math.max(1, Math.min(omMaxQty, parseInt(document.getElementById("om-qty").value) || 1));
@@ -329,7 +331,15 @@ if (root) {
     document.getElementById("om-total").textContent = `$${total}`;
   }
 
-  function openOrderModal(listing) {
+  function closeOrderModal() {
+    orderModal.style.display = "none";
+    orderModal.setAttribute("aria-hidden", "true");
+    if (lastOrderTrigger && document.contains(lastOrderTrigger)) lastOrderTrigger.focus();
+    lastOrderTrigger = null;
+  }
+
+  function openOrderModal(listing, triggerEl = null) {
+    lastOrderTrigger = triggerEl;
     omListingId   = listing.id;
     omPricePerUnit = listing.price;
     omMaxQty      = listing.quantityAvailable;
@@ -342,12 +352,16 @@ if (root) {
     qtyInput.value = 1;
     updateOrderTotal();
     orderModal.style.display = "flex";
+    orderModal.setAttribute("aria-hidden", "false");
     setTimeout(() => qtyInput.focus(), 60);
   }
 
   document.getElementById("om-qty").addEventListener("input", updateOrderTotal);
-  document.getElementById("om-cancel").addEventListener("click", () => { orderModal.style.display = "none"; });
-  orderModal.addEventListener("click", (e) => { if (e.target === orderModal) orderModal.style.display = "none"; });
+  document.getElementById("om-cancel").addEventListener("click", closeOrderModal);
+  orderModal.addEventListener("click", (e) => { if (e.target === orderModal) closeOrderModal(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && orderModal.style.display !== "none") closeOrderModal();
+  });
 
   document.getElementById("om-confirm").addEventListener("click", () => {
     const qty = parseInt(document.getElementById("om-qty").value) || 1;
@@ -370,7 +384,7 @@ if (root) {
       return;
     }
 
-    orderModal.style.display = "none";
+    closeOrderModal();
     toast("success", `Order placed — ${qty} ${omUnit} of "${result.data.title}"!`);
 
     // Update the card in-place: refresh stock display and disable button if exhausted
@@ -409,13 +423,14 @@ if (root) {
       btn.type = "button";
       btn.textContent = qty > 0 ? "Add to Order" : "Out of stock";
       btn.disabled = qty <= 0;
+      btn.setAttribute("aria-label", qty > 0 ? `Add ${listing.title} to order` : `${listing.title} is out of stock`);
       btn.addEventListener("click", (e) => {
         e.preventDefault();
         if (!curUser) {
           openGuestGate();
           return;
         }
-        openOrderModal(listing);
+        openOrderModal(listing, btn);
       });
       wrap.appendChild(btn);
       card.appendChild(wrap);
