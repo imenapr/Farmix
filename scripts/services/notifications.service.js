@@ -89,6 +89,9 @@ export function getUnreadCount(userId) {
 
 /** Prime notification cache for navbar — call after auth init. */
 export async function primeNotificationCache(userId) {
+  if (primeNotificationCache._primed?.has(userId)) return;
+  if (!primeNotificationCache._primed) primeNotificationCache._primed = new Set();
+  primeNotificationCache._primed.add(userId);
   await getNotificationsForUser(userId);
 }
 

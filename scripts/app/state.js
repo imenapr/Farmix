@@ -16,7 +16,7 @@ import {
   waitForRecoverySession as authWaitForRecoverySession,
   watchSession,
 } from "../services/auth.service.js";
-import { getListingById as getListingByIdSvc, getUserListings as getUserListingsSvc, searchListings as searchListingsSvc } from "../services/listings.service.js";
+import { getListingById as getListingByIdSvc, getUserListings as getUserListingsSvc, searchListings as searchListingsSvc, getTrendingListings as getTrendingListingsSvc } from "../services/listings.service.js";
 
 let initialized = false;
 
@@ -42,11 +42,6 @@ export async function initAppState() {
   initialized = true;
   await initAuthSession();
   watchSession();
-  const user = getAuthUser();
-  if (user?.role === "admin") {
-    const { primeNotificationCache } = await import("../services/notifications.service.js");
-    primeNotificationCache(user.id);
-  }
 }
 
 export async function login(input) {
@@ -96,8 +91,5 @@ export async function getUserListings(userId) {
 
 /** Home page: latest active listings. */
 export async function getTrendingListings(limit = 6) {
-  const params = new URLSearchParams({ sort: "newest", page: "1" });
-  const res = await searchListingsSvc(params);
-  if (!res.ok) return res;
-  return { ok: true, data: res.data.items.slice(0, limit) };
+  return getTrendingListingsSvc(limit);
 }

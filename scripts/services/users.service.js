@@ -1,7 +1,10 @@
 import { getSupabase } from "../lib/supabase.js";
 import { userFromDb, keysToSnake } from "../lib/transform.js";
 import { validateProfileUpdate } from "../data/validators.js";
-import { invalidateCache } from "../lib/cache.js";
+import { getCache, setCache, invalidateCache } from "../lib/cache.js";
+
+const USER_CACHE_PREFIX = "users:id:";
+const USER_TTL = 60_000;
 
 function err(code, message, fieldErrors) {
   return { ok: false, error: { code, message, fieldErrors } };
@@ -12,10 +15,16 @@ function ok(data) {
 }
 
 export async function getUserById(userId) {
+  const cacheKey = `${USER_CACHE_PREFIX}${userId}`;
+  const cached = getCache(cacheKey);
+  if (cached) return ok(cached);
+
   const supabase = getSupabase();
   const { data, error } = await supabase.from("users").select("*").eq("id", userId).maybeSingle();
   if (error || !data) return err("NOT_FOUND", "User not found.");
-  return ok(userFromDb(data));
+  const user = userFromDb(data);
+  setCache(cacheKey, user, USER_TTL);
+  return ok(user);
 }
 
 /** Resolve auth email from a profile phone number (for phone-based login). */
@@ -43,5 +52,6 @@ export async function updateProfile(userId, input) {
   if (error || !data) return err("DB_ERROR", error?.message ?? "Update failed.");
 
   invalidateCache("listings:");
+  invalidateCache(`${USER_CACHE_PREFIX}${userId}`);
   return ok(userFromDb(data));
 }

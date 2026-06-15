@@ -242,10 +242,37 @@ if (root) {
 
   mountListingCardLinks(resultsEl);
 
+  const listingsById = new Map();
+  let orderDelegationMounted = false;
+
+  function mountOrderDelegation() {
+    if (orderDelegationMounted) return;
+    orderDelegationMounted = true;
+    resultsEl.addEventListener("click", (event) => {
+      const btn = event.target.closest(".btn-order");
+      if (!btn) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const card = btn.closest("[data-listing-id]");
+      const id = card?.dataset?.listingId;
+      const listing = id ? listingsById.get(id) : null;
+      if (!listing) return;
+      const curUser = getCurrentUser();
+      if (!curUser) {
+        openGuestGate();
+        return;
+      }
+      openOrderModal(listing);
+    });
+  }
+
+  mountOrderDelegation();
+
   let cachedResults = null;
 
   function renderResultsBlock({ items, total, page, pageSize, filters }) {
     cachedResults = { items, total, page, pageSize, filters };
+    for (const listing of items) listingsById.set(listing.id, listing);
     countEl.textContent = total === 1 ? t("marketplace.result", { n: total }) : t("marketplace.results", { n: total });
     pageEl.textContent = filters.q ? t("marketplace.searching", { q: filters.q }) : "";
 
@@ -600,14 +627,6 @@ if (root) {
       btn.type = "button";
       btn.textContent = qty > 0 ? t("marketplace.addToOrder") : t("marketplace.outOfStock");
       btn.disabled = qty <= 0;
-      btn.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (!curUser) {
-          openGuestGate();
-          return;
-        }
-        openOrderModal(listing);
-      });
       wrap.appendChild(btn);
       card.appendChild(wrap);
     });

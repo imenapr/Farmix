@@ -147,6 +147,8 @@ CREATE INDEX idx_notifications_read_at ON public.notifications(read_at);
 CREATE INDEX idx_favorites_user_id ON public.favorites(user_id);
 CREATE INDEX idx_listing_reviews_listing_id ON public.listing_reviews(listing_id);
 CREATE INDEX idx_listing_reviews_user_id ON public.listing_reviews(user_id);
+CREATE INDEX IF NOT EXISTS idx_listings_active_created ON public.listings(created_at DESC) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_listings_active_price ON public.listings(price) WHERE status = 'active';
 
 -- ============================================================================
 -- ROW-LEVEL SECURITY (RLS) - ENABLE ON ALL TABLES
@@ -395,6 +397,21 @@ CREATE TRIGGER update_orders_updated_at BEFORE UPDATE ON public.orders
 
 CREATE TRIGGER update_listing_reviews_updated_at BEFORE UPDATE ON public.listing_reviews
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Atomic view counter (avoids read-modify-write round trips from the client)
+CREATE OR REPLACE FUNCTION public.increment_listing_view(listing_id uuid)
+RETURNS void
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  UPDATE public.listings
+  SET view_count = COALESCE(view_count, 0) + 1,
+      updated_at = (now() AT TIME ZONE 'utc')
+  WHERE id = listing_id;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.increment_listing_view(uuid) TO anon, authenticated;
 
 -- ============================================================================
 -- SEED DATA - TEST USERS (Optional: comment out if not needed)

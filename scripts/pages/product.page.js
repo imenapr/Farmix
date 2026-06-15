@@ -103,8 +103,13 @@ async function loadListing() {
     }
   }
 
-  const res = await getListingById(listingId);
-  if (!res.ok) {
+  const user = getCurrentUser();
+  const [listingRes, reviewRes] = await Promise.all([
+    getListingById(listingId),
+    user ? getUserReviewForListing(listingId, user.id) : Promise.resolve({ ok: true, data: null }),
+  ]);
+
+  if (!listingRes.ok) {
     root.innerHTML = renderStateBlock({
       title: t("product.notFoundTitle"),
       description: t("product.notFoundDesc"),
@@ -113,12 +118,10 @@ async function loadListing() {
     return;
   }
 
-  listing = res.data;
-  const user = getCurrentUser();
+  listing = listingRes.data;
   userReview = null;
-  if (user && user.id !== listing.sellerId) {
-    const reviewRes = await getUserReviewForListing(listingId, user.id);
-    if (reviewRes.ok) userReview = reviewRes.data;
+  if (user && user.id !== listing.sellerId && reviewRes.ok) {
+    userReview = reviewRes.data;
   }
 
   if (!viewsCounted) {
@@ -126,6 +129,21 @@ async function loadListing() {
     viewsCounted = true;
   }
   renderPage();
+}
+
+function revealSellerPhone(phone) {
+  phoneRevealed = true;
+  phoneValue = phone || null;
+  const revealBtn = root.querySelector("[data-reveal-phone]");
+  const area = root.querySelector("[data-seller-phone-area]");
+  if (!area) return;
+
+  area.hidden = false;
+  area.innerHTML = phoneValue
+    ? `<span class="muted" style="font-size:var(--text-sm);">${t("common.phone")}</span>
+       <a class="seller-phone-value" href="tel:${escapeHtml(phoneValue.replace(/\D/g, ""))}">${escapeHtml(phoneValue)}</a>`
+    : `<span class="muted" style="font-size:var(--text-sm);">${t("product.phoneMissing")}</span>`;
+  revealBtn?.remove();
 }
 
 function renderPage() {
@@ -359,9 +377,7 @@ function renderPage() {
       }
 
       const phone = sellerRes.data.phone;
-      phoneRevealed = true;
-      phoneValue = phone || null;
-      renderPage();
+      revealSellerPhone(phone);
     });
   }
 

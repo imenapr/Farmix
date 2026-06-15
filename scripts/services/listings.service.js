@@ -63,6 +63,12 @@ export async function getListingById(listingId) {
 
 export async function incrementListingView(listingId) {
   const supabase = getSupabase();
+  const { error: rpcError } = await supabase.rpc("increment_listing_view", { listing_id: listingId });
+  if (!rpcError) {
+    emit("listing:view", { listingId });
+    return ok(null);
+  }
+
   const { data, error } = await supabase.from("listings").select("view_count").eq("id", listingId).maybeSingle();
   if (error || !data) return err("NOT_FOUND", "Listing not found");
 
@@ -74,9 +80,34 @@ export async function incrementListingView(listingId) {
 
   if (updateError) return err("DB_ERROR", updateError.message);
 
-  invalidateCache(`${LISTINGS_CACHE_PREFIX}id:${listingId}`);
   emit("listing:view", { listingId, views: newViews });
   return ok({ views: newViews });
+}
+
+const LISTING_CARD_COLUMNS =
+  "id,seller_id,title,description,category_id,price,unit,quantity_available,location,images,status,view_count,created_at,updated_at";
+
+export async function getTrendingListings(limit = 6) {
+  const safeLimit = clamp(Number(limit) || 6, 1, 24);
+  const cacheKey = `${LISTINGS_CACHE_PREFIX}trending:${safeLimit}`;
+  const cached = getCache(cacheKey);
+  if (cached) return ok(cached);
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("listings")
+    .select(LISTING_CARD_COLUMNS)
+    .eq("status", "active")
+    .order("created_at", { ascending: false })
+    .limit(safeLimit);
+
+  if (error) return err("DB_ERROR", error.message);
+
+  let items = (data ?? []).map(listingFromDb);
+  items = await attachRatings(items);
+  items.forEach((l) => setCache(`${LISTINGS_CACHE_PREFIX}id:${l.id}`, l, LISTING_TTL));
+  setCache(cacheKey, items, SEARCH_TTL);
+  return ok(items);
 }
 
 export async function searchListings(filters = new URLSearchParams()) {
@@ -88,8 +119,13 @@ export async function searchListings(filters = new URLSearchParams()) {
   if (!parsed.ok) return err("VALIDATION_FAILED", "Invalid filters", parsed.fieldErrors);
 
   const f = parsed.value;
+  const pageSize = 9;
+  const page = clamp(Number(f.page || 1), 1, 999);
+  const start = (page - 1) * pageSize;
+  const end = start + pageSize - 1;
+
   const supabase = getSupabase();
-  let query = supabase.from("listings").select("*").eq("status", "active");
+  let query = supabase.from("listings").select(LISTING_CARD_COLUMNS, { count: "exact" }).eq("status", "active");
 
   if (f.q) query = query.or(`title.ilike.%${f.q}%,description.ilike.%${f.q}%`);
   if (f.cat) query = query.eq("category_id", f.cat);
@@ -97,32 +133,27 @@ export async function searchListings(filters = new URLSearchParams()) {
   if (f.min != null) query = query.gte("price", Number(f.min));
   if (f.max != null) query = query.lte("price", Number(f.max));
 
-  const { data, error } = await query;
-  if (error) return err("DB_ERROR", error.message);
-
-  let items = (data ?? []).map(listingFromDb);
-  items = await attachRatings(items);
-
   switch (f.sort) {
     case "price_asc":
-      items.sort((a, b) => a.price - b.price);
+      query = query.order("price", { ascending: true });
       break;
     case "price_desc":
-      items.sort((a, b) => b.price - a.price);
+      query = query.order("price", { ascending: false });
       break;
     default:
-      items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      query = query.order("created_at", { ascending: false });
   }
 
-  const pageSize = 9;
-  const page = clamp(Number(f.page || 1), 1, 999);
-  const start = (page - 1) * pageSize;
-  const paginated = items.slice(start, start + pageSize);
+  const { data, error, count } = await query.range(start, end);
+  if (error) return err("DB_ERROR", error.message);
+
+  let paginated = (data ?? []).map(listingFromDb);
+  paginated = await attachRatings(paginated);
   paginated.forEach((l) => setCache(`${LISTINGS_CACHE_PREFIX}id:${l.id}`, l, LISTING_TTL));
 
   const result = {
     items: paginated,
-    total: items.length,
+    total: count ?? paginated.length,
     page,
     pageSize,
     filters: f,

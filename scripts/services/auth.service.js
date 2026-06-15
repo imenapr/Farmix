@@ -364,7 +364,22 @@ export function watchSession() {
       setCurrentUserInternal(null);
       return;
     }
-    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user?.id) {
+        setCurrentUserInternal(null);
+        return;
+      }
+      const cachedProfile = getCachedProfile(session.user.id);
+      if (cachedProfile) {
+        setCurrentUserInternal(cachedProfile);
+        return;
+      }
+      const profile = await fetchUserProfile(session.user.id);
+      setCurrentUserInternal(profile);
+      return;
+    }
+    if (event === "USER_UPDATED") {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user?.id) {
         setCurrentUserInternal(null);

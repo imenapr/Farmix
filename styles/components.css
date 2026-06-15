@@ -827,6 +827,7 @@
   position: relative;
   display: block;
   overflow: hidden;
+  aspect-ratio: 600 / 440;
   background: rgba(20, 106, 75, 0.06);
   z-index: 0;
 }
