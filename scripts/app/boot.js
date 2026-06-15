@@ -4,6 +4,7 @@ import { mountFooter } from "../components/footer.js";
 import { mountGuestActionGates } from "../components/guest-gate.js";
 import { initAppState } from "./state.js";
 import { initTheme } from "./theme.js";
+import { initListingNavigation } from "./ui.js";
 
 function ensureGlobalDesignSystem() {
   if (!document.head) return;
@@ -82,6 +83,7 @@ export function boot() {
   initTheme();
   ensureGlobalDesignSystem();
   initToasts();
+  initListingNavigation();
 
   const shell = document.querySelector("[data-app-shell]");
   if (shell) shell.classList.add("app-shell");

@@ -1,12 +1,21 @@
 import { boot } from "../app/boot.js";
 import { getCurrentUser } from "../app/auth-state.js";
 import { getListingById } from "../app/state.js";
-import { escapeHtml, renderStateBlock, toast, qs, setText } from "../app/ui.js";
+import {
+  escapeHtml,
+  renderStateBlock,
+  toast,
+  qs,
+  setText,
+  readListingIdFromUrl,
+  productListingUrl,
+} from "../app/ui.js";
 import { incrementListingView, archiveListingAsOwnerOrAdmin } from "../services/listings.service.js";
 import { getUserReviewForListing, submitListingReview } from "../services/reviews.service.js";
 import { createInquiry } from "../services/messages.service.js";
 import { getUserById } from "../services/users.service.js";
-import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
+import { t, onLanguageChange, translatePageHead, getCategoryLabel } from "../app/i18n.js";
+import { getCategoryById } from "../data/categories.js";
 
 boot();
 translatePageHead("product.pageTitle");
@@ -76,7 +85,7 @@ let inquiryDraft = "";
 let userReview = null;
 
 async function loadListing() {
-  listingId = new URLSearchParams(location.search).get("id");
+  listingId = readListingIdFromUrl();
   if (!listingId) {
     root.innerHTML = renderStateBlock({
       title: t("product.missingIdTitle"),
@@ -84,6 +93,14 @@ async function loadListing() {
       actionsHtml: `<a class="btn btn-primary" href="/pages/marketplace.html">${t("product.backToMarketplace")}</a>`,
     });
     return;
+  }
+
+  if (!new URLSearchParams(location.search).get("id")) {
+    try {
+      history.replaceState(null, "", productListingUrl(listingId));
+    } catch {
+      /* ignore */
+    }
   }
 
   const res = await getListingById(listingId);
@@ -153,7 +170,7 @@ function renderPage() {
           <div class="product-price">${escapeHtml(price)} / ${escapeHtml(listing.unit)}</div>
 
           <div class="listing-meta" style="margin-top:0.6rem;">
-            <span class="pill">${escapeHtml(listing.categoryId)}</span>
+            <span class="pill">${escapeHtml(getCategoryLabel(listing.categoryId, getCategoryById(listing.categoryId)?.name))}</span>
             <span class="pill">${escapeHtml(listing.location || "")}</span>
             <span class="pill">${escapeHtml(String(listing.quantityAvailable))} ${t("product.available")}</span>
             <span class="pill" style="color: #666;">${listing.status === "active" ? t("product.status.available") : listing.status === "sold" ? t("product.status.sold") : t("product.status.archived")}</span>

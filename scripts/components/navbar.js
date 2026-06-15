@@ -137,17 +137,27 @@ function renderNav({ user } = {}) {
     </div>
   ` : "";
 
+  const drawerAuthHtml = isAuthed ? `
+    <a class="nav-drawer-link" href="/pages/messages.html">${t("nav.messages")}</a>
+    <a class="nav-drawer-link nav-drawer-account" href="/pages/account.html">
+      <span class="nav-avatar" aria-hidden="true">${userInitials}</span>
+      <span>${esc(user.name)}</span>
+    </a>
+    <button class="btn btn-ghost btn-full-mobile" type="button" data-action="logout">${t("common.logout")}</button>
+  ` : `
+    <a class="btn btn-ghost btn-full-mobile" href="/pages/login.html">${t("common.login")}</a>
+    <a class="btn btn-primary btn-full-mobile" href="/pages/signup.html">${t("common.signUp")}</a>
+  `;
+
   return `
     <header class="nav" role="banner">
       <div class="container nav-inner">
 
-        <!-- Brand -->
         <a class="brand" href="/index.html" aria-label="${APP.name} home">
           <img src="/img/logo.png" alt="${APP.name} logo" />
           <span class="brand-name">${APP.name}</span>
         </a>
 
-        <!-- Nav links (hidden on mobile) -->
         <nav class="nav-links" aria-label="Primary navigation">
           ${roleLinks(role)}
           <span class="nav-role-badge ${badgeClass}" aria-label="${t("nav.viewingAs", { role: badgeLabel })}">
@@ -155,8 +165,21 @@ function renderNav({ user } = {}) {
           </span>
         </nav>
 
-        <!-- Actions -->
         <div class="nav-actions">
+          <button
+            class="nav-hamburger"
+            type="button"
+            data-action="nav-toggle"
+            aria-label="${t("nav.menuOpen")}"
+            aria-expanded="false"
+            aria-controls="nav-drawer"
+          >
+            <span class="nav-hamburger-box" aria-hidden="true">
+              <span class="nav-hamburger-line"></span>
+              <span class="nav-hamburger-line"></span>
+              <span class="nav-hamburger-line"></span>
+            </span>
+          </button>
           <button
             class="lang-toggle"
             type="button"
@@ -182,7 +205,7 @@ function renderNav({ user } = {}) {
           >
             ${themeToggleIcon(theme)}
           </button>
-          ${isAuthed ? `<a class="nav-messages-link" href="/pages/messages.html" aria-label="${t("nav.messages")}" title="${t("nav.messages")}">
+          ${isAuthed ? `<a class="nav-messages-link nav-desktop-only" href="/pages/messages.html" aria-label="${t("nav.messages")}" title="${t("nav.messages")}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -190,20 +213,31 @@ function renderNav({ user } = {}) {
           </a>` : ""}
           ${bellHtml}
           ${isAuthed ? `
-            <a class="nav-user" href="../../pages/account.html" aria-label="${t("nav.openAccount")}">
-                <span class="nav-avatar" aria-hidden="true">
-                ${userInitials}
-                </span>
-
-                 ${esc(user.name)}
+            <a class="nav-user nav-desktop-only" href="/pages/account.html" aria-label="${t("nav.openAccount")}">
+              <span class="nav-avatar" aria-hidden="true">${userInitials}</span>
+              <span class="nav-user-name">${esc(user.name)}</span>
             </a>
-            <button class="btn btn-ghost" type="button" data-action="logout">${t("common.logout")}</button>
+            <button class="btn btn-ghost nav-desktop-only" type="button" data-action="logout">${t("common.logout")}</button>
           ` : `
-            <a class="btn btn-ghost" href="/pages/login.html">${t("common.login")}</a>
-            <a class="btn btn-primary" href="/pages/signup.html">${t("common.signUp")}</a>
+            <a class="btn btn-ghost nav-desktop-only" href="/pages/login.html">${t("common.login")}</a>
+            <a class="btn btn-primary nav-desktop-only" href="/pages/signup.html">${t("common.signUp")}</a>
           `}
         </div>
+      </div>
 
+      <div class="nav-drawer" id="nav-drawer" aria-hidden="true">
+        <button class="nav-drawer-backdrop" type="button" data-action="nav-close" aria-label="${t("nav.menuClose")}" tabindex="-1"></button>
+        <div class="nav-drawer-panel" role="dialog" aria-modal="true" aria-label="${t("nav.menuOpen")}">
+          <nav class="nav-drawer-links" aria-label="Mobile navigation">
+            ${roleLinks(role)}
+          </nav>
+          <div class="nav-drawer-footer">
+            <span class="nav-role-badge ${badgeClass}">${badgeLabel}</span>
+            <div class="nav-drawer-actions">
+              ${drawerAuthHtml}
+            </div>
+          </div>
+        </div>
       </div>
     </header>
   `;
@@ -218,24 +252,60 @@ export function mountNavbar(targetEl) {
   let _unsubNotif    = null;
   let _docClickOff   = null;
   let _docKeydownOff = null;
+  let _navKeydownOff = null;
+
+  function setNavOpen(open) {
+    const drawer = targetEl.querySelector("#nav-drawer");
+    const toggleBtn = targetEl.querySelector("[data-action='nav-toggle']");
+    if (!drawer || !toggleBtn) return;
+    drawer.classList.toggle("is-open", open);
+    drawer.setAttribute("aria-hidden", open ? "false" : "true");
+    toggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    toggleBtn.setAttribute("aria-label", open ? t("nav.menuClose") : t("nav.menuOpen"));
+    document.body.classList.toggle("nav-open", open);
+  }
 
   function render(payload) {
     // Clean up previous dynamic subscriptions before re-rendering
     if (_unsubNotif)  { _unsubNotif();  _unsubNotif  = null; }
     if (_docClickOff) { _docClickOff(); _docClickOff = null; }
     if (_docKeydownOff) { _docKeydownOff(); _docKeydownOff = null; }
+    if (_navKeydownOff) { _navKeydownOff(); _navKeydownOff = null; }
+    document.body.classList.remove("nav-open");
 
     targetEl.innerHTML = renderNav(payload);
 
+    const navToggle = targetEl.querySelector("[data-action='nav-toggle']");
+    const navClose = targetEl.querySelector("[data-action='nav-close']");
+    if (navToggle) {
+      navToggle.addEventListener("click", () => {
+        const isOpen = targetEl.querySelector("#nav-drawer")?.classList.contains("is-open");
+        setNavOpen(!isOpen);
+      });
+    }
+    if (navClose) {
+      navClose.addEventListener("click", () => setNavOpen(false));
+    }
+    targetEl.querySelectorAll(".nav-drawer-links a, .nav-drawer-actions a").forEach((link) => {
+      link.addEventListener("click", () => setNavOpen(false));
+    });
+    const navEscHandler = (e) => {
+      if (e.key === "Escape" && targetEl.querySelector("#nav-drawer")?.classList.contains("is-open")) {
+        setNavOpen(false);
+        navToggle?.focus();
+      }
+    };
+    document.addEventListener("keydown", navEscHandler);
+    _navKeydownOff = () => document.removeEventListener("keydown", navEscHandler);
+
     // ── Logout ────────────────────────────────────────────────────────
-    const logoutBtn = targetEl.querySelector("[data-action='logout']");
-    if (logoutBtn) {
+    targetEl.querySelectorAll("[data-action='logout']").forEach((logoutBtn) => {
       logoutBtn.addEventListener("click", async () => {
         logoutBtn.disabled = true;
         await logout();
         location.href = "/index.html";
       });
-    }
+    });
 
     // ── Theme toggle ──────────────────────────────────────────────────
     const themeBtn = targetEl.querySelector("[data-action='theme-toggle']");
@@ -391,6 +461,8 @@ export function mountNavbar(targetEl) {
     if (_unsubNotif)  _unsubNotif();
     if (_docClickOff) _docClickOff();
     if (_docKeydownOff) _docKeydownOff();
+    if (_navKeydownOff) _navKeydownOff();
+    document.body.classList.remove("nav-open");
     unsubAuth();
     unsubLang();
   };

@@ -298,6 +298,31 @@
   }
 }
 
+@media (max-width: 768px) {
+  .hero h1 {
+    font-size: clamp(1.85rem, 8vw, 2.4rem);
+  }
+
+  .hero-sub {
+    font-size: var(--text-sm);
+  }
+
+  .hero-stat-value {
+    font-size: 1.25rem;
+  }
+
+  .section-title {
+    font-size: var(--text-xl);
+    margin-top: 1.75rem;
+  }
+
+  .orb-left,
+  .orb-right {
+    width: 320px;
+    height: 320px;
+  }
+}
+
 @media (max-width: 640px) {
   .hero-card {
     padding: 1.75rem 1.25rem 1.5rem;

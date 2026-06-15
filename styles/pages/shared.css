@@ -34,3 +34,18 @@
     align-items: start;
   }
 }
+
+@media (max-width: 768px) {
+  .page-title {
+    font-size: var(--text-2xl);
+  }
+
+  .page-subtitle {
+    font-size: var(--text-sm);
+  }
+
+  .page-head {
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+  }
+}

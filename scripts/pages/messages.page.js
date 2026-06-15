@@ -1,6 +1,6 @@
 import { boot } from "../app/boot.js";
 import { initAppState, getCurrentUser } from "../app/auth-state.js";
-import { escapeHtml, renderStateBlock, toast } from "../app/ui.js";
+import { escapeHtml, renderStateBlock, toast, productListingUrl } from "../app/ui.js";
 import {
   listConversations,
   getConversation,
@@ -110,7 +110,7 @@ function renderThread(convo, messages) {
         <div class="msg-chat-name">${escapeHtml(convo.otherUserName || t("common.unknown"))}</div>
         ${convo.listingTitle ? `<div class="msg-chat-sub">${t("messages.re")} ${escapeHtml(convo.listingTitle)}</div>` : ""}
       </div>
-      ${convo.listingId ? `<a class="btn btn-ghost btn-sm" href="/pages/product.html?id=${escapeHtml(convo.listingId)}">${t("messages.viewListing")}</a>` : ""}
+      ${convo.listingId ? `<a class="btn btn-ghost btn-sm" href="${escapeHtml(productListingUrl(convo.listingId))}">${t("messages.viewListing")}</a>` : ""}
     </header>
     <div class="msg-thread" id="msg-thread">
       ${bubbles || `<div class="msg-empty">${t("messages.noMessages")}</div>`}

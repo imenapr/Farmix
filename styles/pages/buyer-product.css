@@ -162,16 +162,30 @@
   border-color: rgba(39, 168, 116, 0.65);
 }
 
+@media (max-width: 768px) {
+  .bp-media img {
+    height: 220px;
+  }
+
+  .bp-title {
+    font-size: var(--text-2xl);
+  }
+
+  .bp-ratings {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .bp-media img {
+    height: 200px;
+  }
+}
+
 @media (min-width: 920px) {
   .bp-layout {
     grid-template-columns: 1.2fr 0.8fr;
     align-items: start;
-  }
-}
-
-@media (max-width: 680px) {
-  .bp-ratings {
-    grid-template-columns: 1fr;
   }
 }
 

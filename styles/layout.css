@@ -3,11 +3,33 @@
   margin-inline: auto;
 }
 
+@media (max-width: 768px) {
+  .container {
+    width: min(var(--container-max), calc(100% - 1.25rem));
+  }
+
+  main {
+    padding-block: 1rem 2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    width: min(var(--container-max), calc(100% - 1rem));
+  }
+}
+
 .app-shell,
 [data-app-shell] {
   min-height: 100%;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
+}
+
+[data-mount="navbar"] {
+  padding-top: 0.75rem;
+  flex-shrink: 0;
 }
 
 main {
@@ -38,5 +60,57 @@ main {
   .grid.cols-3 {
     grid-template-columns: repeat(3, 1fr);
   }
+}
+
+/* ─── Mobile typography scale ─────────────────────────────────────── */
+@media (max-width: 1024px) {
+  :root {
+    --text-3xl: 2rem;
+    --text-4xl: 2.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --text-2xl: 1.5rem;
+    --text-3xl: 1.75rem;
+    --text-4xl: 2.1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --text-xl: 1.125rem;
+    --text-2xl: 1.35rem;
+    --text-3xl: 1.55rem;
+  }
+}
+
+/* ─── Touch-friendly actions on small screens ─────────────────────── */
+@media (max-width: 768px) {
+  .btn {
+    min-height: 44px;
+    padding-block: 0.7rem;
+  }
+
+  .btn-full-mobile,
+  .hero-actions .btn,
+  .market-layout .filters-grid .btn,
+  .seller-box .btn,
+  .product-layout .btn-primary,
+  .product-layout form .btn-primary,
+  .order-modal-actions .btn,
+  .pager .btn {
+    width: 100%;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+body.nav-open {
+  overflow: hidden;
 }
 

@@ -1,9 +1,9 @@
 import { boot } from "../app/boot.js";
-import { qs, toast } from "../app/ui.js";
+import { qs, toast, productListingUrl } from "../app/ui.js";
 import { initAppState, getCurrentUser } from "../app/auth-state.js";
 import { getListingById, updateListing } from "../services/listings.service.js";
-import { CATEGORIES } from "../data/seed.js";
-import { t, onLanguageChange } from "../app/i18n.js";
+import { getCategories } from "../data/categories.js";
+import { t, onLanguageChange, getCategoryLabel } from "../app/i18n.js";
 
 boot();
 
@@ -90,7 +90,7 @@ function mountForm() {
             <label class="form-label" for="category">${t("common.category")}</label>
             <select class="input" id="category" name="categoryId" required>
               <option value="">${t("listingForm.selectCategory")}</option>
-              ${CATEGORIES.map((c) => `<option value="${c.id}" ${c.id === listing.categoryId ? "selected" : ""}>${c.name}</option>`).join("")}
+              ${getCategories().map((c) => `<option value="${c.id}" ${c.id === listing.categoryId ? "selected" : ""}>${getCategoryLabel(c.id, c.name)}</option>`).join("")}
             </select>
             <span class="form-error" data-err="categoryId"></span>
           </div>
@@ -148,7 +148,7 @@ function mountForm() {
 
           <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; margin-top: 1.5rem;">
             <button class="btn btn-primary" type="submit" data-submit>${t("common.saveChanges")}</button>
-            <a class="btn btn-ghost" href="/pages/product.html?id=${listingId}">${t("common.cancel")}</a>
+            <a class="btn btn-ghost" href="${productListingUrl(listingId)}">${t("common.cancel")}</a>
           </div>
         </form>
       </section>
@@ -249,7 +249,7 @@ function wireForm(form) {
 
       toast("success", t("listingForm.updated"));
       setTimeout(() => {
-        window.location.href = `/pages/product.html?id=${listingId}`;
+        window.location.href = productListingUrl(listingId);
       }, 500);
     } catch (err) {
       setLoading(false);

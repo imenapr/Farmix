@@ -1,5 +1,5 @@
 import { boot } from "../app/boot.js";
-import { escapeHtml, renderSkeletonCards, renderStateBlock, qs } from "../app/ui.js";
+import { escapeHtml, renderSkeletonCards, renderStateBlock, qs, mountListingCardLinks } from "../app/ui.js";
 import { getUserById } from "../services/users.service.js";
 import { getUserListings } from "../app/state.js";
 import { renderListingCard } from "../components/listing-card.js";
@@ -76,6 +76,7 @@ function renderProfile() {
   }
 
   listingsMount.innerHTML = `<div class="grid cols-3">${profileListings.map((x) => renderListingCard(x)).join("")}</div>`;
+  mountListingCardLinks(listingsMount);
 }
 
 async function loadProfile(id) {

@@ -3,8 +3,8 @@ import { qs, toast } from "../app/ui.js";
 import { initAppState, getCurrentUser } from "../app/auth-state.js";
 import { ROLES } from "../app/config.js";
 import { createListing } from "../services/listings.service.js";
-import { CATEGORIES } from "../data/seed.js";
-import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
+import { t, onLanguageChange, translatePageHead, getCategoryLabel } from "../app/i18n.js";
+import { getCategories } from "../data/categories.js";
 
 boot();
 translatePageHead("listingForm.addPageTitle", "listingForm.addPageSubtitle");
@@ -16,6 +16,17 @@ await initAppState();
 
 const user = getCurrentUser();
 let savedFormState = null;
+/** @type {{ id: string, file: File, dataUrl: string }[]} */
+let pendingImages = [];
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 function unitOptions(selected = "") {
   const units = [
@@ -87,7 +98,7 @@ function mountPage() {
             <label class="form-label" for="category">${t("common.category")}</label>
             <select class="input" id="category" name="categoryId" required>
               <option value="">${t("listingForm.selectCategory")}</option>
-              ${CATEGORIES.map((c) => `<option value="${c.id}">${c.name}</option>`).join("")}
+              ${getCategories().map((c) => `<option value="${c.id}">${getCategoryLabel(c.id, c.name)}</option>`).join("")}
             </select>
             <span class="form-error" data-err="categoryId"></span>
           </div>
@@ -127,12 +138,26 @@ function mountPage() {
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="images">${t("listingForm.productImages")}</label>
-            <input class="input" id="images" name="images" type="file" accept="image/*" multiple />
-            <span class="muted" style="font-size: var(--text-sm);">${t("listingForm.imagesHint")}</span>
-            <span class="form-error" data-err="images"></span>
+            <span class="form-label">${t("listingForm.productImages")}</span>
+            <div class="listing-image-picker" data-image-picker>
+              <div class="listing-image-grid" data-image-preview-grid hidden></div>
+              <label class="listing-image-add btn btn-ghost" data-image-add>
+                <input
+                  class="listing-image-input"
+                  id="images"
+                  name="images"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  hidden
+                />
+                ${t("listingForm.addImage")}
+              </label>
+              <span class="muted" style="font-size: var(--text-sm);">${t("listingForm.imagesHint")}</span>
+              <span class="form-error" data-err="images"></span>
+            </div>
+          </div>
 
-            
           <p class="form-error-banner" id="form-error" role="alert" style="display: none;"></p>
 
           <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; align-items: center; margin-top: 1.5rem;">
@@ -146,7 +171,75 @@ function mountPage() {
 
   const form = qs(root, "#add-form");
   restoreFormState(form, savedFormState);
+  wireImagePicker(form);
   wireForm(form);
+}
+
+function wireImagePicker(form) {
+  const fileInput = qs(form, "#images");
+  const grid = qs(form, "[data-image-preview-grid]");
+  const addLabel = qs(form, "[data-image-add]");
+
+  function renderPreviews() {
+    if (!grid) return;
+    if (!pendingImages.length) {
+      grid.innerHTML = "";
+      grid.hidden = true;
+      if (addLabel) addLabel.hidden = false;
+      return;
+    }
+
+    grid.hidden = false;
+    grid.innerHTML = pendingImages
+      .map(
+        (img) => `
+        <div class="listing-image-thumb" data-image-id="${img.id}">
+          <img src="${img.dataUrl}" alt="" />
+          <button
+            type="button"
+            class="listing-image-remove"
+            data-remove-image="${img.id}"
+            aria-label="${t("listingForm.removeImage")}"
+          >&times;</button>
+        </div>
+      `,
+      )
+      .join("");
+
+    grid.querySelectorAll("[data-remove-image]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-remove-image");
+        pendingImages = pendingImages.filter((img) => img.id !== id);
+        renderPreviews();
+      });
+    });
+
+    if (addLabel) addLabel.hidden = pendingImages.length >= 8;
+  }
+
+  renderPreviews();
+
+  fileInput?.addEventListener("change", async () => {
+    const files = Array.from(fileInput.files || []);
+    fileInput.value = "";
+
+    if (!files.length) return;
+
+    const slotsLeft = 8 - pendingImages.length;
+    if (slotsLeft <= 0) return;
+
+    for (const file of files.slice(0, slotsLeft)) {
+      if (!file.type.startsWith("image/")) continue;
+      const dataUrl = await readFileAsDataUrl(file);
+      pendingImages.push({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        file,
+        dataUrl,
+      });
+    }
+
+    renderPreviews();
+  });
 }
 
 function wireForm(form) {
@@ -185,21 +278,7 @@ function wireForm(form) {
 
     try {
       const fd = new FormData(form);
-      let images = [];
-      const files = form.elements.namedItem("images").files;
-      if (files && files.length > 0) {
-        const readers = [];
-        for (let i = 0; i < Math.min(files.length, 8); i++) {
-          readers.push(
-            new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result);
-              reader.readAsDataURL(files[i]);
-            }),
-          );
-        }
-        images = await Promise.all(readers);
-      }
+      let images = pendingImages.map((img) => img.dataUrl);
 
       const imageUrlsText = fd.get("imageUrls") || "";
       if (String(imageUrlsText).trim()) {
@@ -238,7 +317,7 @@ function wireForm(form) {
 
       toast("success", t("listingForm.created"));
       setTimeout(() => {
-        window.location.href = `/pages/product.html?id=${res.data.id}`;
+        window.location.href = "/pages/farmer-dashboard.html";
       }, 500);
     } catch (err) {
       setLoading(false);

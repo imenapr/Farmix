@@ -26,6 +26,8 @@ export const CATEGORIES = [
   { id: "meat", name: "Meat" },
   { id: "honey", name: "Honey" },
   { id: "grains", name: "Grains" },
+  { id: "animal", name: "Animal" },
+  { id: "machine", name: "Machine" },
 ];
 
 export function seedDbV1({ version, seededAt }) {

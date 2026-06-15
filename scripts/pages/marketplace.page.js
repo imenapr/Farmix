@@ -1,42 +1,36 @@
 import { boot } from "../app/boot.js";
-import { debounce, renderSkeletonCards, renderStateBlock, toast, qs } from "../app/ui.js";
+import { debounce, renderSkeletonCards, renderStateBlock, toast, qs, mountListingCardLinks } from "../app/ui.js";
 import { getCurrentUser } from "../app/auth-state.js";
 import { searchListings } from "../app/state.js";
-import { CATEGORIES as SEED_CATEGORIES } from "../data/seed.js";
+import { getCategories } from "../data/categories.js";
 import { ROLES } from "../app/config.js";
 import { validateMarketplaceFilters } from "../data/validators.js";
 import { renderListingCard } from "../components/listing-card.js";
 import { placeOrder } from "../services/orders.service.js";
 import { openGuestGate } from "../components/guest-gate.js";
-import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
+import { t, onLanguageChange, translatePageHead, getCategoryLabel } from "../app/i18n.js";
 
 boot();
 translatePageHead("marketplace.pageTitle", "marketplace.pageSubtitle");
-
-/** Seed categories always appear; optional admin overrides in localStorage are merged by id. */
-function getCategories() {
-  const byId = new Map(SEED_CATEGORIES.map((c) => [c.id, c]));
-  const stored = localStorage.getItem("farmix_categories");
-  if (stored) {
-    try {
-      const parsed = JSON.parse(stored);
-      if (Array.isArray(parsed)) {
-        for (const c of parsed) {
-          if (c && c.id && c.name) byId.set(String(c.id), { id: String(c.id), name: String(c.name) });
-        }
-      }
-    } catch {
-      /* ignore bad JSON */
-    }
-  }
-  return Array.from(byId.values());
-}
 
 const root = document.getElementById("marketplace-root");
 if (root) {
   root.innerHTML = `
     <div class="market-layout">
-      <aside class="filters">
+      <aside class="filters" id="market-filters">
+        <button
+          type="button"
+          class="filters-toggle btn btn-ghost"
+          data-filters-toggle
+          aria-expanded="false"
+          aria-controls="market-filters-panel"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round"/>
+          </svg>
+          <span data-filters-toggle-label>${t("marketplace.showFilters")}</span>
+        </button>
+        <div class="filters-panel" id="market-filters-panel">
         <section class="card pad">
           <form id="filters-form" class="filters-grid" novalidate>
             <label class="stack" style="gap:0.35rem;">
@@ -84,6 +78,7 @@ if (root) {
             </div>
           </form>
         </section>
+        </div>
       </aside>
 
       <div id="category-modal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
@@ -110,12 +105,38 @@ if (root) {
   `;
 
   const form = qs(root, "#filters-form");
+  const filtersPanel = qs(root, "#market-filters-panel");
+  const filtersToggle = qs(root, "[data-filters-toggle]");
+  const filtersToggleLabel = qs(root, "[data-filters-toggle-label]");
+
+  function setFiltersOpen(open) {
+    if (!filtersPanel || !filtersToggle) return;
+    filtersPanel.classList.toggle("is-open", open);
+    filtersToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    if (filtersToggleLabel) {
+      filtersToggleLabel.textContent = open ? t("marketplace.hideFilters") : t("marketplace.showFilters");
+    }
+  }
+
+  if (filtersToggle) {
+    filtersToggle.addEventListener("click", () => {
+      setFiltersOpen(!filtersPanel?.classList.contains("is-open"));
+    });
+  }
+
+  onLanguageChange(() => {
+    const isOpen = filtersPanel?.classList.contains("is-open");
+    if (filtersToggleLabel) {
+      filtersToggleLabel.textContent = isOpen ? t("marketplace.hideFilters") : t("marketplace.showFilters");
+    }
+  });
+
   const catSelect = qs(form, "select[name='cat']");
   const CATEGORIES = getCategories();
   for (const c of CATEGORIES) {
     const opt = document.createElement("option");
     opt.value = c.id;
-    opt.textContent = c.name;
+    opt.textContent = getCategoryLabel(c.id, c.name);
     catSelect.appendChild(opt);
   }
 
@@ -219,6 +240,8 @@ if (root) {
   const resetBtn = qs(root, "[data-reset]");
   const qInput = qs(form, "input[name='q']");
 
+  mountListingCardLinks(resultsEl);
+
   let cachedResults = null;
 
   function renderResultsBlock({ items, total, page, pageSize, filters }) {
@@ -303,6 +326,15 @@ if (root) {
     const catOpt = catSelect.querySelector('option[value=""]');
     if (catOpt) catOpt.textContent = t("marketplace.allCategories");
 
+    Array.from(catSelect.options).forEach((opt) => {
+      if (!opt.value || opt.value === "config") return;
+      const cat = CATEGORIES.find((c) => c.id === opt.value);
+      opt.textContent = getCategoryLabel(opt.value, cat?.name);
+    });
+
+    const configOpt = catSelect.querySelector('option[value="config"]');
+    if (configOpt) configOpt.textContent = t("marketplace.configCategories");
+
     const sortSelect = form.elements.namedItem("sort");
     if (sortSelect) {
       const opts = sortSelect.options;
@@ -314,9 +346,6 @@ if (root) {
     const applyBtn = form.querySelector('button[type="submit"]');
     if (applyBtn) applyBtn.textContent = t("common.apply");
     if (resetBtn) resetBtn.textContent = t("common.reset");
-
-    const configOpt = catSelect.querySelector('option[value="config"]');
-    if (configOpt) configOpt.textContent = t("marketplace.configCategories");
 
     const modalTitle = modal.querySelector("h3");
     if (modalTitle) modalTitle.textContent = t("marketplace.editCategoriesAdmin");

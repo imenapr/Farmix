@@ -1,5 +1,5 @@
 import { boot } from "../app/boot.js";
-import { renderSkeletonCards, renderStateBlock } from "../app/ui.js";
+import { renderSkeletonCards, renderStateBlock, mountListingCardLinks } from "../app/ui.js";
 import { renderListingCard } from "../components/listing-card.js";
 import { getTrendingListings } from "../app/state.js";
 import { getCurrentUser } from "../app/auth-state.js";
@@ -67,6 +67,7 @@ function renderLatest() {
       ${latestItems.map((l) => renderListingCard(l, { compact: true, maskLocation: isGuest })).join("")}
     </div>
   `;
+  mountListingCardLinks(mount);
 }
 
 function loadLatest() {

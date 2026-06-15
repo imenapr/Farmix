@@ -177,9 +177,57 @@
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 768px) {
+  .product-title {
+    font-size: var(--text-2xl);
+  }
+
+  .product-media img {
+    height: 220px;
+  }
+
+  .product-hero {
+    gap: 1rem;
+  }
+
+  .product-layout .stack {
+    order: 2;
+  }
+
+  .product-layout .product-hero {
+    order: 1;
+  }
+
+  .seller-box .btn,
+  .product-layout aside .btn-primary {
+    width: 100%;
+  }
+
+  .thumb-btn {
+    width: 64px;
+    height: 64px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
   .rating-grid {
     grid-template-columns: 1fr;
+  }
+
+  .star-picker-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  .product-media img {
+    height: 200px;
+    border-radius: 14px;
+  }
+
+  .product-price {
+    font-size: var(--text-lg);
   }
 }
 

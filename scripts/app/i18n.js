@@ -67,8 +67,19 @@ export const translations = {
     "nav.switchToGeorgian": "Switch to Georgian",
     "nav.switchToEnglish": "Switch to English",
     "nav.viewingAs": "Viewing as {role}",
+    "nav.menuOpen": "Open menu",
+    "nav.menuClose": "Close menu",
 
     "listing.uncategorized": "Uncategorized",
+
+    "category.vegetables": "Vegetables",
+    "category.fruits": "Fruits",
+    "category.dairy": "Dairy",
+    "category.meat": "Meat",
+    "category.honey": "Honey",
+    "category.grains": "Grains",
+    "category.animal": "Animal",
+    "category.machine": "Machine",
     "listing.loginToSeeLocation": "Login to see exact location",
     "listing.availableShort": "{n} avail.",
     "listing.noRatingsYet": "No ratings yet",
@@ -341,6 +352,8 @@ export const translations = {
     "marketplace.loadFailed": "Failed to load marketplace.",
     "marketplace.pageTitle": "Marketplace",
     "marketplace.pageSubtitle": "Search and filter listings. Filters will persist via URL query parameters.",
+    "marketplace.showFilters": "Show filters",
+    "marketplace.hideFilters": "Hide filters",
 
     "profile.missingId": "Missing profile ID",
     "profile.missingIdDesc": "Return to the marketplace and open a seller profile.",
@@ -387,6 +400,8 @@ export const translations = {
     "listingForm.locationPlaceholder": "City, State",
     "listingForm.descriptionPlaceholder": "Describe your product, growing methods, certifications, etc.",
     "listingForm.productImages": "Product images",
+    "listingForm.addImage": "Add image",
+    "listingForm.removeImage": "Remove image",
     "listingForm.imagesHint": "Upload up to 8 photos.",
     "listingForm.imagesHintEdit": "Upload new images to replace current ones.",
     "listingForm.imageUrls": "Or paste image URLs (comma-separated)",
@@ -523,8 +538,19 @@ export const translations = {
     "nav.switchToGeorgian": "ქართულზე გადართვა",
     "nav.switchToEnglish": "ინგლისურზე გადართვა",
     "nav.viewingAs": "როლი: {role}",
+    "nav.menuOpen": "მენიუს გახსნა",
+    "nav.menuClose": "მენიუს დახურვა",
 
     "listing.uncategorized": "უკატეგორიო",
+
+    "category.vegetables": "ბოსტნეული",
+    "category.fruits": "ხილი",
+    "category.dairy": "რძის პროდუქტები",
+    "category.meat": "ხორცი",
+    "category.honey": "თაფლი",
+    "category.grains": "მარცვლეული",
+    "category.animal": "ცხოველები",
+    "category.machine": "მანქანები",
     "listing.loginToSeeLocation": "ზუსტი მდებარეობის სანახავად შედით",
     "listing.availableShort": "{n} ხელმისაწვდომია",
     "listing.noRatingsYet": "შეფასება ჯერ არ არის",
@@ -742,8 +768,8 @@ export const translations = {
     "common.permissionDenied": "წვდომა აკრძალულია",
 
     "home.eyebrow": "მარკეტი · პირდაპირ ფერმიდან",
-    "home.headline1": "სადაც ფერმები",
-    "home.headlineEm": "შეხვდება ბაზარს.",
+    "home.headline1": "სადაც ფერმერები",
+    "home.headlineEm": "ხვდებიან მარკეტს.",
     "home.subtitle": "იყიდეთ ახალი პროდუქტი პირდაპირ ფერმერებისგან ან მოიძიეთ საბითუმოდ თქვენი ბიზნესისთვის — გამჭვირვალე ფასებით და შუამავლების გარეშე.",
     "home.sellAsFarmer": "გაყიდე როგორც ფერმერი",
     "home.guestGateTitle": "შეუერთდით FARMIX საზოგადოებას ვაჭრობის დასაწყებად!",
@@ -798,6 +824,8 @@ export const translations = {
     "marketplace.loadFailed": "მარკეტის ჩატვირთვა ვერ მოხერხდა.",
     "marketplace.pageTitle": "მარკეტი",
     "marketplace.pageSubtitle": "მოძებნეთ და გაფილტრეთ განცხადებები. ფილტრები URL პარამეტრებში შეინახება.",
+    "marketplace.showFilters": "ფილტრების ჩვენება",
+    "marketplace.hideFilters": "ფილტრების დამალვა",
 
     "profile.missingId": "პროფილის ID აკლია",
     "profile.missingIdDesc": "დაბრუნდით მარკეტში და გახსენით გამყიდველის პროფილი.",
@@ -844,6 +872,8 @@ export const translations = {
     "listingForm.locationPlaceholder": "ქალაქი, რეგიონი",
     "listingForm.descriptionPlaceholder": "აღწერეთ პროდუქტი, მომზადების მეთოდები, სერტიფიკატები და ა.შ.",
     "listingForm.productImages": "პროდუქტის სურათები",
+    "listingForm.addImage": "სურათის დამატება",
+    "listingForm.removeImage": "სურათის წაშლა",
     "listingForm.imagesHint": "ატვირთეთ 8 ფოტომდე.",
     "listingForm.imagesHintEdit": "ატვირთეთ ახალი სურათები არსებულის ჩასანაცვლებლად.",
     "listingForm.imageUrls": "ან ჩასვით სურათის URL-ები (მძიმით გამოყოფილი)",
@@ -912,9 +942,9 @@ export const translations = {
 
     "guestGate.eyebrow": "სტუმრის გადახედვა",
     "guestGate.title": "შეუერთდით FARMIX საზოგადოებას ვაჭრობის დასაწყებად!",
-    "guestGate.sub": "შექმენით უფასო ანგარიში ან შედით ამ ქმედების გასაგრძელებლად.",
+    "guestGate.sub": "შექმენით ანგარიში ან შედით ამ ქმედების გასაგრძელებლად.",
     "guestGate.login": "შესვლა",
-    "guestGate.signup": "უფასო ანგარიშის შექმნა",
+    "guestGate.signup": "რეგისტრაცია",
     "guestGate.close": "დახურვა",
   },
 };
@@ -938,6 +968,16 @@ function safeLocalStorageWrite(lang) {
 export function getCurrentLang() {
   const saved = String(safeLocalStorageRead() ?? "en").toLowerCase();
   return SUPPORTED_LANGS.has(saved) ? saved : "en";
+}
+
+export function getCategoryLabel(categoryId, fallbackName = "") {
+  if (!categoryId) return t("listing.uncategorized");
+  const key = `category.${categoryId}`;
+  const lang = getCurrentLang();
+  const translated = translations[lang]?.[key] ?? translations.en[key];
+  if (translated) return translated;
+  if (fallbackName) return fallbackName;
+  return String(categoryId);
 }
 
 export function t(key, vars = {}) {

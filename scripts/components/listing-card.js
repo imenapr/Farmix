@@ -1,6 +1,6 @@
-import { escapeHtml } from "../app/ui.js";
-import { CATEGORIES } from "../data/seed.js";
-import { t } from "../app/i18n.js";
+import { escapeHtml, productListingUrl } from "../app/ui.js";
+import { getCategoryById } from "../data/categories.js";
+import { t, getCategoryLabel } from "../app/i18n.js";
 
 // Curated photography for seeded products — matched by title keyword at render time
 // so already-seeded localStorage data picks up the real images without a reseed.
@@ -54,35 +54,38 @@ export function renderListingCard(listing, { compact = false, maskLocation = fal
     ? Math.round(((delivery + quality) / 2) * 10) / 10
     : null;
 
-  const category = CATEGORIES.find((c) => c.id === listing.categoryId);
-  const categoryName = category
-    ? category.name
-    : listing.categoryId
-    ? String(listing.categoryId)
-    : t("listing.uncategorized");
+  const category = getCategoryById(listing.categoryId);
+  const categoryName = getCategoryLabel(listing.categoryId, category?.name);
 
-  const href = `/pages/product.html?id=${encodeURIComponent(listing.id)}`;
+  const listingId = String(listing.id ?? "").trim();
+  const href = listingId ? productListingUrl(listingId) : "";
   const locationText = maskLocation ? t("listing.loginToSeeLocation") : String(listing.location ?? "");
 
   return `
     <article class="listing-card glass-card"
-      data-listing-id="${escapeHtml(listing.id)}"
+      data-listing-id="${escapeHtml(listingId)}"
       data-qty="${qty}"
       data-seller-id="${escapeHtml(listing.sellerId ?? "")}"
       ${compact ? 'data-compact="true"' : ""}>
 
-      <a class="listing-media" href="${href}" aria-label="${escapeHtml(t("listing.viewProduct", { title: listing.title }))}">
+      ${
+        href
+          ? `<a class="listing-media" href="${href}" aria-label="${escapeHtml(t("listing.viewProduct", { title: listing.title }))}">`
+          : `<div class="listing-media">`
+      }
         <img src="${escapeHtml(img)}" alt="${escapeHtml(listing.title)}" loading="lazy" />
         <div class="listing-media-overlay">
           <span class="listing-badge-cat">${escapeHtml(categoryName)}</span>
         </div>
-      </a>
+      ${href ? "</a>" : "</div>"}
 
       <div class="listing-body">
         <div class="listing-header">
-          <h3 class="listing-title">
-            <a href="${href}">${escapeHtml(listing.title)}</a>
-          </h3>
+          <h3 class="listing-title">${
+            href
+              ? `<a href="${href}">${escapeHtml(listing.title)}</a>`
+              : escapeHtml(listing.title)
+          }</h3>
           <div class="listing-meta-row">
             <span class="listing-location ${maskLocation ? "listing-location-masked" : ""}">
               ${PIN_SVG}

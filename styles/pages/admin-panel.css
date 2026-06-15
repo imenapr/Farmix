@@ -348,3 +348,14 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 768px) {
+  .adm-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .adm-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+}

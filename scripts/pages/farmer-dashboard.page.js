@@ -1,7 +1,7 @@
 import { boot } from "../app/boot.js";
 import { ROLES } from "../app/config.js";
 import { guardRole } from "../app/router-guards.js";
-import { escapeHtml, renderStateBlock } from "../app/ui.js";
+import { escapeHtml, renderStateBlock, productListingUrl, mountListingCardLinks } from "../app/ui.js";
 import { getUserListings } from "../services/listings.service.js";
 import { listInquiriesForSeller } from "../services/messages.service.js";
 import { renderListingCard } from "../components/listing-card.js";
@@ -108,7 +108,7 @@ function renderOverview() {
                 .map(
                   (l) => `
                 <tr>
-                  <td><a class="fd-row-link" href="/pages/product.html?id=${encodeURIComponent(l.id)}">${escapeHtml(l.title)}</a></td>
+                  <td><a class="fd-row-link" href="${escapeHtml(productListingUrl(l.id))}">${escapeHtml(l.title)}</a></td>
                   <td>${escapeHtml(l.status)}</td>
                   <td>${Number(l.views ?? 0)}</td>
                   <td>$${Number(l.price ?? 0).toFixed(2)}</td>
@@ -231,6 +231,8 @@ function renderDashboard() {
     ${renderMessagesSection()}
     ${renderProfileSection()}
   `;
+
+  mountListingCardLinks(root.querySelector("#fd-section-listings .grid"));
 
   document.querySelectorAll(".fd-nav-item").forEach((btn) => {
     btn.addEventListener("click", () => showSection(btn.dataset.section));
