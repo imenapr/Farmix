@@ -12,6 +12,12 @@ export function placeOrder(buyerId, listingId, quantity) {
   if (!guard.ok) return guard;
 
   const buyer = guard.data.user;
+  if (String(buyerId ?? "") !== String(buyer.id)) {
+    return {
+      ok: false,
+      error: { code: "FORBIDDEN", message: "You can only place orders for your own account." },
+    };
+  }
   if (buyer.role === ROLES.farmer || buyer.role === ROLES.admin) {
     return { ok: false, error: { code: "FORBIDDEN", message: "Only buyers can place orders." } };
   }
@@ -26,6 +32,10 @@ export function placeOrder(buyerId, listingId, quantity) {
     const l = db.listings.find((x) => x.id === listingId);
     if (!l || l.status !== "active") {
       created.stockError = "This listing is no longer available.";
+      return db;
+    }
+    if (l.sellerId === buyer.id) {
+      created.stockError = "You can't place an order on your own listing.";
       return db;
     }
     if (qty > l.quantityAvailable) {
@@ -45,7 +55,7 @@ export function placeOrder(buyerId, listingId, quantity) {
     const order = {
       id: `ord_${t.toString(16)}_${Math.random().toString(16).slice(2)}`,
       listingId,
-      buyerId,
+      buyerId: buyer.id,
       sellerId: l.sellerId,
       title: l.title,
       quantity: qty,
