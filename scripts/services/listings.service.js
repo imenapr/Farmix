@@ -22,6 +22,11 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+function quotePostgrestFilterValue(value) {
+  const escaped = String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return `"${escaped}"`;
+}
+
 async function attachSellerNames(listings) {
   if (!listings.length) return listings;
   const supabase = getSupabase();
@@ -91,7 +96,10 @@ export async function searchListings(filters = new URLSearchParams()) {
   const supabase = getSupabase();
   let query = supabase.from("listings").select("*").eq("status", "active");
 
-  if (f.q) query = query.or(`title.ilike.%${f.q}%,description.ilike.%${f.q}%`);
+  if (f.q) {
+    const searchPattern = quotePostgrestFilterValue(`%${f.q}%`);
+    query = query.or(`title.ilike.${searchPattern},description.ilike.${searchPattern}`);
+  }
   if (f.cat) query = query.eq("category_id", f.cat);
   if (f.loc) query = query.ilike("location", `%${f.loc}%`);
   if (f.min != null) query = query.gte("price", Number(f.min));
