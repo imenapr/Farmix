@@ -375,6 +375,7 @@ export const translations = {
     "marketplace.pageSubtitle": "Search and filter listings. Filters will persist via URL query parameters.",
     "marketplace.showFilters": "Show filters",
     "marketplace.hideFilters": "Hide filters",
+    "marketplace.inStockOnly": "In stock only",
 
     "profile.missingId": "Missing profile ID",
     "profile.missingIdDesc": "Return to the marketplace and open a seller profile.",
@@ -871,6 +872,7 @@ export const translations = {
     "marketplace.pageSubtitle": "მოძებნეთ და გაფილტრეთ განცხადებები. ფილტრები URL პარამეტრებში შეინახება.",
     "marketplace.showFilters": "ფილტრების ჩვენება",
     "marketplace.hideFilters": "ფილტრების დამალვა",
+    "marketplace.inStockOnly": "მხოლოდ მარაგში",
 
     "profile.missingId": "პროფილის ID აკლია",
     "profile.missingIdDesc": "დაბრუნდით მარკეტში და გახსენით გამყიდველის პროფილი.",

@@ -140,6 +140,7 @@ export async function searchListings(filters = new URLSearchParams()) {
   if (f.loc) query = query.ilike("location", `%${f.loc}%`);
   if (f.min != null) query = query.gte("price", Number(f.min));
   if (f.max != null) query = query.lte("price", Number(f.max));
+  if (f.inStockOnly) query = query.gt("quantity_available", 0);
 
   switch (f.sort) {
     case "price_asc":

@@ -72,6 +72,11 @@ if (root) {
               </select>
             </label>
 
+            <label class="filters-check">
+              <input type="checkbox" name="inStock" value="1" />
+              <span data-in-stock-label>${t("marketplace.inStockOnly")}</span>
+            </label>
+
             <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
               <button class="btn btn-primary" type="submit">${t("common.apply")}</button>
               <button class="btn btn-ghost" type="button" data-reset>${t("common.reset")}</button>
@@ -239,6 +244,7 @@ if (root) {
   const pagerEl = qs(root, "[data-pager]");
   const resetBtn = qs(root, "[data-reset]");
   const qInput = qs(form, "input[name='q']");
+  const inStockInput = qs(form, "input[name='inStock']");
 
   mountListingCardLinks(resultsEl);
 
@@ -301,6 +307,7 @@ if (root) {
         min: filters.min,
         max: filters.max,
         sort: filters.sort,
+        stock: filters.inStockOnly ? "in_stock" : null,
       },
     });
   }
@@ -328,6 +335,8 @@ if (root) {
     formEl.elements.namedItem("min").value = state.min;
     formEl.elements.namedItem("max").value = state.max;
     formEl.elements.namedItem("sort").value = state.sort;
+    const inStockEl = formEl.elements.namedItem("inStock");
+    if (inStockEl) inStockEl.checked = Boolean(state.inStockOnly);
   }
 
   function translateFilterLabels() {
@@ -374,6 +383,9 @@ if (root) {
     if (applyBtn) applyBtn.textContent = t("common.apply");
     if (resetBtn) resetBtn.textContent = t("common.reset");
 
+    const inStockLabel = form.querySelector("[data-in-stock-label]");
+    if (inStockLabel) inStockLabel.textContent = t("marketplace.inStockOnly");
+
     const modalTitle = modal.querySelector("h3");
     if (modalTitle) modalTitle.textContent = t("marketplace.editCategoriesAdmin");
     if (addBtn) addBtn.textContent = t("marketplace.addCategory");
@@ -392,7 +404,7 @@ if (root) {
 
     // Remove unknown/empty params.
     for (const k of [...params.keys()]) {
-      if (!["q", "cat", "loc", "min", "max", "sort", "page"].includes(k)) params.delete(k);
+      if (!["q", "cat", "loc", "min", "max", "sort", "stock", "page"].includes(k)) params.delete(k);
       if (params.get(k) === "") params.delete(k);
     }
 
@@ -413,6 +425,8 @@ if (root) {
     form.elements.namedItem("min").value = filters.min ?? "";
     form.elements.namedItem("max").value = filters.max ?? "";
     form.elements.namedItem("sort").value = filters.sort ?? "newest";
+    const inStockEl = form.elements.namedItem("inStock");
+    if (inStockEl) inStockEl.checked = Boolean(filters.inStockOnly);
   }
 
   function renderPager({ page, pageSize, total, currentParams }) {
@@ -661,6 +675,7 @@ if (root) {
       min: fd.get("min"),
       max: fd.get("max"),
       sort: fd.get("sort"),
+      stock: fd.get("inStock") === "1" ? "in_stock" : null,
       page: 1,
     });
     render();
@@ -668,6 +683,7 @@ if (root) {
 
   const applyFiltersDebounced = debounce(applyFiltersFromForm, 400);
   qInput.addEventListener("input", applyFiltersDebounced);
+  if (inStockInput) inStockInput.addEventListener("change", applyFiltersFromForm);
 
   form.addEventListener("submit", (e) => {
     e.preventDefault();

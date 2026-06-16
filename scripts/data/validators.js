@@ -216,10 +216,13 @@ export function validateMarketplaceFilters(params) {
   const max = maxRaw === null || maxRaw === "" ? null : Number(maxRaw);
 
   const sort = String(params.get("sort") ?? "newest");
+  const stock = String(params.get("stock") ?? "").trim();
+  const inStockOnly = stock === "in_stock";
   const pageRaw = params.get("page");
   const page = pageRaw ? Number(pageRaw) : 1;
 
   const fieldErrors = {};
+  if (stock && stock !== "in_stock") fieldErrors.stock = "Invalid stock filter.";
   if (min !== null && !Number.isFinite(min)) fieldErrors.min = "Min price must be a number.";
   if (max !== null && !Number.isFinite(max)) fieldErrors.max = "Max price must be a number.";
   if (!Number.isFinite(page) || page < 1) fieldErrors.page = "Page must be a positive number.";
@@ -239,6 +242,7 @@ export function validateMarketplaceFilters(params) {
     max: safeMax,
     loc,
     sort,
+    inStockOnly,
     page: clampNumber(page, { min: 1, max: 999 }),
   });
 }

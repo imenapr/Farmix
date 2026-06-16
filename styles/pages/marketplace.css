@@ -20,6 +20,22 @@
   grid-template-columns: 1fr;
 }
 
+.filters-check {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filters-check input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--color-primary, #2d6a4f);
+  cursor: pointer;
+}
+
 .market-topbar {
   display: flex;
   gap: 0.65rem;
