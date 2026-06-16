@@ -1,6 +1,7 @@
 import { emit, on } from "./events.js";
 
 const LANG_KEY = "farmix.lang";
+const DEFAULT_LANG = "ka";
 const SUPPORTED_LANGS = new Set(["en", "ka"]);
 
 export const translations = {
@@ -966,8 +967,8 @@ function safeLocalStorageWrite(lang) {
 }
 
 export function getCurrentLang() {
-  const saved = String(safeLocalStorageRead() ?? "en").toLowerCase();
-  return SUPPORTED_LANGS.has(saved) ? saved : "en";
+  const saved = String(safeLocalStorageRead() ?? DEFAULT_LANG).toLowerCase();
+  return SUPPORTED_LANGS.has(saved) ? saved : DEFAULT_LANG;
 }
 
 export function getCategoryLabel(categoryId, fallbackName = "") {
@@ -994,7 +995,7 @@ export function reRenderUI() {
 }
 
 export function setLanguage(lang) {
-  const next = SUPPORTED_LANGS.has(lang) ? lang : "en";
+  const next = SUPPORTED_LANGS.has(lang) ? lang : DEFAULT_LANG;
   safeLocalStorageWrite(next);
   reRenderUI();
   return next;
