@@ -1,21 +1,18 @@
 .container {
-  width: min(var(--container-max), calc(100% - 2rem));
+  width: min(100%, var(--layout-width));
+  margin-inline: auto;
+}
+
+/* Dashboard grids share the same 90% viewport column as standard pages */
+.fd-shell,
+.adm-shell {
+  width: min(100%, var(--layout-width));
   margin-inline: auto;
 }
 
 @media (max-width: 768px) {
-  .container {
-    width: min(var(--container-max), calc(100% - 1.25rem));
-  }
-
   main {
     padding-block: 1rem 2rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .container {
-    width: min(var(--container-max), calc(100% - 1rem));
   }
 }
 

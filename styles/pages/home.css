@@ -45,6 +45,7 @@
 .hero-card {
   position: relative;
   overflow: hidden;
+  width: 100%;
   background: var(--glass-bg-card);
   border: 1px solid var(--glass-border);
   backdrop-filter: var(--glass-blur-heavy);

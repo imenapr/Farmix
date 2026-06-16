@@ -62,6 +62,7 @@
   --text-4xl: 3rem;
 
   /* Layout */
+  --layout-width: 90vw;
   --container-max: 1180px;
   --radius-sm: 10px;
   --radius-md: 16px;
