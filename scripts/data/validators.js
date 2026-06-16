@@ -28,6 +28,12 @@ export function validateEmail(email) {
   return ok(value);
 }
 
+export function validateOptionalEmail(email) {
+  const value = String(email ?? "").trim().toLowerCase();
+  if (!value) return ok(undefined);
+  return validateEmail(value);
+}
+
 export function validatePassword(password) {
   const value = String(password ?? "");
   if (value.length < 8) return fail({ password: t("validation.passwordMin", { default: "Password must be at least 8 characters." }) });
@@ -69,7 +75,7 @@ export function validatePhone(phone) {
 export function validateSignup(input) {
   const fieldErrors = {};
 
-  const emailR = validateEmail(input?.email);
+  const emailR = validateOptionalEmail(input?.email);
   if (!emailR.ok) Object.assign(fieldErrors, emailR.fieldErrors);
 
   const passR = validatePassword(input?.password);
@@ -87,23 +93,18 @@ export function validateSignup(input) {
   const phoneR = validatePhone(input?.phone);
   if (!phoneR.ok) Object.assign(fieldErrors, phoneR.fieldErrors);
 
-  const farmName = String(input?.farmName ?? "").trim();
   const companyName = String(input?.companyName ?? "").trim();
 
   if (roleR.ok && roleR.value === ROLES.farmer) {
-    if (!farmName) fieldErrors.farmName = "Farm name is required for farmers.";
-    if (farmName.length > 60) fieldErrors.farmName = "Farm name is too long.";
     if (companyName) fieldErrors.companyName = "Business company name is not allowed for farmer role.";
   }
 
   if (roleR.ok && roleR.value === ROLES.business) {
     if (!companyName) fieldErrors.companyName = "Company name is required for business accounts.";
     if (companyName.length > 60) fieldErrors.companyName = "Company name is too long.";
-    if (farmName) fieldErrors.farmName = "Farm name is not allowed for business role.";
   }
 
   if (roleR.ok && roleR.value === ROLES.consumer) {
-    if (farmName) fieldErrors.farmName = "Consumers cannot set a farm name.";
     if (companyName) fieldErrors.companyName = "Consumers cannot set a company name.";
   }
 
@@ -116,7 +117,6 @@ export function validateSignup(input) {
     name: nameR.value,
     location: locR.value,
     phone: phoneR.value,
-    farmName: farmName || undefined,
     companyName: companyName || undefined,
   });
 }
@@ -238,6 +238,14 @@ export function validateMarketplaceFilters(params) {
   });
 }
 
+export function validateListingReport(input) {
+  const reason = String(input?.reason ?? "").trim();
+  if (reason.length > 500) {
+    return fail({ reason: t("validation.reportReasonMax", { default: "Reason is too long (max 500 characters)." }) });
+  }
+  return ok({ reason: reason || undefined });
+}
+
 export function validateInquiry(input) {
   const fieldErrors = {};
 
@@ -268,9 +276,6 @@ export function validateProfileUpdate(input) {
   const companyName = String(input?.companyName ?? "").trim();
   if (companyName && companyName.length > 60) fieldErrors.companyName = "Company name is too long.";
 
-  const farmName = String(input?.farmName ?? "").trim();
-  if (farmName && farmName.length > 60) fieldErrors.farmName = "Farm name is too long.";
-
   if (Object.keys(fieldErrors).length) return fail(fieldErrors);
 
   return ok({
@@ -279,7 +284,6 @@ export function validateProfileUpdate(input) {
     bio: bio || undefined,
     phone: phone || undefined,
     companyName: companyName || undefined,
-    farmName: farmName || undefined,
   });
 }
 

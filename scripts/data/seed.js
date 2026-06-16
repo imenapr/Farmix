@@ -28,6 +28,7 @@ export const CATEGORIES = [
   { id: "grains", name: "Grains" },
   { id: "animal", name: "Animal" },
   { id: "machine", name: "Machine" },
+  { id: "product", name: "Product" },
 ];
 
 export function seedDbV1({ version, seededAt }) {
@@ -68,7 +69,6 @@ export function seedDbV1({ version, seededAt }) {
       passwordHash: hashMock("Farmer123!"),
       role: ROLES.farmer,
       name: "Nino",
-      farmName: "Green Valley Farm",
       phone: "+995 555 010 101",
       location: "Kakheti",
       bio: "Seasonal vegetables and orchard fruits. Bulk-ready, same-day pickup.",
@@ -81,7 +81,6 @@ export function seedDbV1({ version, seededAt }) {
       passwordHash: hashMock("Farmer123!"),
       role: ROLES.farmer,
       name: "Dato",
-      farmName: "Highland Dairy",
       phone: "+995 555 010 202",
       location: "Kazbegi",
       bio: "Small-batch dairy and honey from highland pastures.",

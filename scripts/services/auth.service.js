@@ -3,6 +3,7 @@ import { emit } from "../app/events.js";
 import { getSupabase } from "../lib/supabase.js";
 import { userFromDb } from "../lib/transform.js";
 import { validateLogin, validateSignup, validateForgotPassword, validateResetPassword } from "../data/validators.js";
+import { authEmailFromPhone } from "../lib/auth-email.js";
 import { createNotification } from "./notifications.service.js";
 import { findEmailByPhone } from "./users.service.js";
 import { ROLES } from "../app/config.js";
@@ -153,14 +154,21 @@ export async function signup(input) {
   const v = validateSignup(input);
   if (!v.ok) return err("VALIDATION_FAILED", t("service.fixHighlighted", { default: "Fix the highlighted fields." }), v.fieldErrors);
 
-  const { email, password, role, name, location, phone, farmName, companyName } = v.value;
+  const { email, password, role, name, location, phone, companyName } = v.value;
   if (![ROLES.farmer, ROLES.business, ROLES.consumer].includes(role)) {
     return err("VALIDATION_FAILED", t("service.roleInvalid", { default: "Select a valid role." }));
   }
 
   const supabase = getSupabase();
+
+  const { data: existingPhone } = await supabase.from("users").select("id").eq("phone", phone).maybeSingle();
+  if (existingPhone) {
+    return err("CONFLICT", t("service.phoneExists", { default: "An account with this phone number already exists." }));
+  }
+
+  const authEmail = email ?? authEmailFromPhone(phone);
   const { data: signData, error: signError } = await supabase.auth.signUp({
-    email,
+    email: authEmail,
     password,
     options: { data: { name, role, location, phone } },
   });
@@ -170,7 +178,7 @@ export async function signup(input) {
       const { data: existingProfile } = await supabase
         .from("users")
         .select("id")
-        .eq("email", email)
+        .eq("email", authEmail)
         .maybeSingle();
 
       if (!existingProfile) {
@@ -194,12 +202,11 @@ export async function signup(input) {
   const now = new Date().toISOString();
   const profileRow = {
     id: authUser.id,
-    email,
+    email: authEmail,
     role,
     name,
     location,
     phone: phone || null,
-    farm_name: farmName || null,
     company_name: companyName || null,
     created_at: now,
     updated_at: now,
@@ -218,8 +225,8 @@ export async function signup(input) {
         userId: admin.id,
         type: "system",
         title: t("service.newFarmer", { default: "New farmer registered" }),
-        message: `New farmer registered: ${name} (${email})`,
-        metadata: { farmerId: authUser.id, farmerName: name, farmerEmail: email },
+        message: `New farmer registered: ${name} (${email ?? phone})`,
+        metadata: { farmerId: authUser.id, farmerName: name, farmerEmail: email ?? null, farmerPhone: phone },
       });
     }
   }

@@ -38,9 +38,7 @@ function restoreSignupState(state) {
       roleInput.value = state.role;
       root.querySelectorAll(".role-card[data-role]").forEach((c) => c.classList.remove("selected"));
       card.classList.add("selected");
-      const farmWrap = qs(root, "[data-cond='farmName']");
       const compWrap = qs(root, "[data-cond='companyName']");
-      if (farmWrap) farmWrap.classList.toggle("visible", state.role === "farmer");
       if (compWrap) compWrap.classList.toggle("visible", state.role === "business");
     }
   }
@@ -104,16 +102,6 @@ function mountSignup() {
           <span class="form-error" data-err="name"></span>
         </div>
 
-        <!-- ── Conditional: Farm name (farmer only) ── -->
-        <div class="conditional-field" data-cond="farmName">
-          <div class="form-field">
-          <label class="form-label" for="sf-farmName">${t("auth.signup.farmName")}</label>
-            <input class="input" id="sf-farmName" name="farmName"
-                   placeholder="${t("auth.signup.farmNamePlaceholder")}" />
-            <span class="form-error" data-err="farmName"></span>
-          </div>
-        </div>
-
         <!-- ── Conditional: Company name (business only) ── -->
         <div class="conditional-field" data-cond="companyName">
           <div class="form-field">
@@ -142,9 +130,9 @@ function mountSignup() {
 
         <!-- ── Email ── -->
         <div class="form-field">
-          <label class="form-label" for="sf-email">${t("auth.signup.email")}</label>
+          <label class="form-label" for="sf-email">${t("auth.signup.emailOptional")}</label>
           <input class="input" id="sf-email" name="email"
-                 type="email" autocomplete="email" placeholder="${t("auth.signup.emailPlaceholder")}" required />
+                 type="email" autocomplete="email" placeholder="${t("auth.signup.emailPlaceholder")}" />
           <span class="form-error" data-err="email"></span>
         </div>
 
@@ -177,23 +165,16 @@ function mountSignup() {
   const banner = qs(root, "#err-banner");
   const roleInput = qs(root, "#role-hidden");
   const loginLink = qs(root, "#login-link");
-  const farmWrap = qs(root, "[data-cond='farmName']");
   const compWrap = qs(root, "[data-cond='companyName']");
-  const farmInput = form.elements.namedItem("farmName");
   const compInput = form.elements.namedItem("companyName");
 
 // ─── Role picker ─────────────────────────────────────────────────
   const roleCards = root.querySelectorAll(".role-card[data-role]");
 
   function syncConditionalFields(role) {
-  const isFarmer   = role === "farmer";
-  const isBusiness = role === "business";
-
-  farmWrap.classList.toggle("visible", isFarmer);
-  compWrap.classList.toggle("visible", isBusiness);
-
-  if (!isFarmer)   farmInput.value = "";
-  if (!isBusiness) compInput.value = "";
+    const isBusiness = role === "business";
+    compWrap.classList.toggle("visible", isBusiness);
+    if (!isBusiness) compInput.value = "";
   }
 
   roleCards.forEach((card) => {
@@ -210,7 +191,7 @@ function mountSignup() {
   if (next) loginLink.href = `/pages/login.html?next=${encodeURIComponent(next)}`;
 
 // ─── Error helpers ────────────────────────────────────────────────
-  const FIELD_KEYS = ["name", "farmName", "companyName", "location", "phone", "email", "password", "role", "form"];
+  const FIELD_KEYS = ["name", "companyName", "location", "phone", "email", "password", "role", "form"];
 
   function clearErrors() {
   setText(banner, "");
@@ -234,7 +215,6 @@ function mountSignup() {
     const fd = new FormData(form);
     const res = await signup({
       name: fd.get("name"),
-      farmName: fd.get("farmName"),
       companyName: fd.get("companyName"),
       location: fd.get("location"),
       phone: fd.get("phone"),

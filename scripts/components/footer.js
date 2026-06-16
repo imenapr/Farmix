@@ -16,8 +16,7 @@ function renderFooter() {
           </div>
           <div class="footer-links" aria-label="Footer links">
             <a href="/pages/marketplace.html">${t("footer.marketplace")}</a>
-            <a href="/pages/for-farmers.html">${t("footer.farmers")}</a>
-            <a href="/pages/for-businesses.html">${t("footer.businesses")}</a>
+            <a href="/pages/terms.html">${t("footer.terms")}</a>
             <a href="/pages/account.html">${t("footer.account")}</a>
           </div>
         </div>

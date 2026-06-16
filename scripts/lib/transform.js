@@ -46,7 +46,6 @@ export function userFromDb(row) {
     phone: u.phone ?? undefined,
     location: u.location,
     bio: u.bio ?? undefined,
-    farmName: u.farmName ?? undefined,
     companyName: u.companyName ?? undefined,
     avatarUrl: u.avatarUrl ?? undefined,
     suspended: Boolean(u.suspended),

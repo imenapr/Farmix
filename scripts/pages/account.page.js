@@ -1,8 +1,9 @@
 import { boot } from "../app/boot.js";
 import { guardAuth } from "../app/router-guards.js";
-import { toast, qs, setText } from "../app/ui.js";
+import { toast, qs, setText, escapeHtml } from "../app/ui.js";
 import { logout as doLogout } from "../app/auth-state.js";
 import { initAppState } from "../app/state.js";
+import { formatAuthIdentifier } from "../lib/auth-email.js";
 import { getUserById, updateProfile } from "../services/users.service.js";
 import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
 
@@ -32,7 +33,6 @@ function renderAccountForm() {
   if (!accountUser || !accountRecord) return;
 
   const record = accountRecord;
-  const isFarmer = record.role === "farmer";
   const isBusiness = record.role === "business";
   const roleLabel = {
     farmer: t("nav.role.farmer"),
@@ -45,7 +45,7 @@ function renderAccountForm() {
     <section class="card pad" style="max-width: 720px;">
       <form id="profile-form" class="stack" novalidate>
         <div class="muted" style="font-size: var(--text-sm);">
-          ${t("account.signedInAs")} <strong>${record.email}</strong> · ${t("common.role")} <strong>${roleLabel}</strong>
+          ${t("account.signedInAs")} <strong>${escapeHtml(formatAuthIdentifier(record))}</strong> · ${t("common.role")} <strong>${roleLabel}</strong>
         </div>
 
         <div class="grid" style="grid-template-columns: 1fr; gap: 0.85rem;">
@@ -75,16 +75,6 @@ function renderAccountForm() {
         </div>
 
         <div class="grid" style="grid-template-columns: 1fr; gap: 0.85rem;">
-          ${
-            isFarmer
-              ? `
-          <label class="stack" style="gap:0.35rem;">
-            <span style="font-weight: 700;">${t("account.farmName")}</span>
-            <input class="input" name="farmName" />
-            <span class="error-text" data-err="farmName"></span>
-          </label>`
-              : ""
-          }
           ${
             isBusiness
               ? `
@@ -120,7 +110,6 @@ function renderAccountForm() {
   setVal("location", record.location);
   setVal("phone", record.phone);
   setVal("bio", record.bio);
-  setVal("farmName", record.farmName);
   setVal("companyName", record.companyName);
   restoreFormState(form, savedFormState);
 
@@ -128,7 +117,7 @@ function renderAccountForm() {
   const errForm = err("form");
 
   function clearErrors() {
-    for (const k of ["name", "location", "phone", "bio", "farmName", "companyName", "form"]) setText(err(k), "");
+    for (const k of ["name", "location", "phone", "bio", "companyName", "form"]) setText(err(k), "");
   }
 
   function setLoading(isLoading) {
@@ -147,7 +136,6 @@ function renderAccountForm() {
       location: fd.get("location"),
       phone: fd.get("phone"),
       bio: fd.get("bio"),
-      farmName: fd.get("farmName"),
       companyName: fd.get("companyName"),
     });
 

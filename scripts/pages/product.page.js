@@ -13,6 +13,7 @@ import {
 import { incrementListingView, archiveListingAsOwnerOrAdmin } from "../services/listings.service.js";
 import { getUserReviewForListing, submitListingReview } from "../services/reviews.service.js";
 import { createInquiry } from "../services/messages.service.js";
+import { reportListing } from "../services/reports.service.js";
 import { getUserById } from "../services/users.service.js";
 import { t, onLanguageChange, translatePageHead, getCategoryLabel } from "../app/i18n.js";
 import { getCategoryById } from "../data/categories.js";
@@ -83,6 +84,142 @@ let descExpanded = false;
 let viewsCounted = false;
 let inquiryDraft = "";
 let userReview = null;
+let reportSubmitted = false;
+let reportModalEl = null;
+
+function syncReportModalCopy() {
+  if (!reportModalEl) return;
+  const title = reportModalEl.querySelector("#report-modal-title");
+  const desc = reportModalEl.querySelector("#report-modal-desc");
+  const reasonLabel = reportModalEl.querySelector("#report-reason-label");
+  const reasonInput = reportModalEl.querySelector("#report-reason");
+  const submitBtn = reportModalEl.querySelector("[data-report-submit]");
+  const cancelBtn = reportModalEl.querySelector("[data-report-cancel]");
+  if (title) title.textContent = t("product.reportListingTitle");
+  if (desc) desc.textContent = t("product.reportListingDesc");
+  if (reasonLabel) reasonLabel.textContent = t("product.reportReason");
+  if (reasonInput) reasonInput.placeholder = t("product.reportReasonPlaceholder");
+  if (submitBtn && !submitBtn.disabled) submitBtn.textContent = t("product.reportSubmit");
+  if (cancelBtn) cancelBtn.textContent = t("common.cancel");
+}
+
+function ensureReportModal() {
+  if (reportModalEl) {
+    syncReportModalCopy();
+    return reportModalEl;
+  }
+
+  reportModalEl = document.createElement("div");
+  reportModalEl.className = "report-modal-backdrop";
+  reportModalEl.hidden = true;
+  reportModalEl.innerHTML = `
+    <div class="report-modal-card" role="dialog" aria-modal="true" aria-labelledby="report-modal-title" tabindex="-1">
+      <h3 class="report-modal-title" id="report-modal-title"></h3>
+      <p class="muted report-modal-desc" id="report-modal-desc"></p>
+      <form id="report-form" class="stack" novalidate>
+        <label class="stack" style="gap:0.35rem;">
+          <span id="report-reason-label" style="font-weight:800;"></span>
+          <textarea class="input" id="report-reason" name="reason" rows="4"></textarea>
+          <span class="form-error" data-err="reason"></span>
+        </label>
+        <p class="form-error-banner" id="report-error" role="alert" hidden></p>
+        <div class="report-modal-actions">
+          <button class="btn btn-ghost" type="button" data-report-cancel></button>
+          <button class="btn btn-primary" type="submit" data-report-submit></button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(reportModalEl);
+  syncReportModalCopy();
+
+  const dialog = reportModalEl.querySelector(".report-modal-card");
+  const form = reportModalEl.querySelector("#report-form");
+  const cancelBtn = reportModalEl.querySelector("[data-report-cancel]");
+  const submitBtn = reportModalEl.querySelector("[data-report-submit]");
+  const reasonInput = reportModalEl.querySelector("#report-reason");
+  const errorBanner = reportModalEl.querySelector("#report-error");
+
+  function closeReportModal() {
+    reportModalEl.hidden = true;
+    document.body.classList.remove("nav-open");
+  }
+
+  function clearReportErrors() {
+    errorBanner.hidden = true;
+    errorBanner.textContent = "";
+    const reasonErr = form.querySelector("[data-err='reason']");
+    if (reasonErr) reasonErr.textContent = "";
+  }
+
+  reportModalEl.addEventListener("click", (event) => {
+    if (event.target === reportModalEl) closeReportModal();
+  });
+
+  cancelBtn.addEventListener("click", closeReportModal);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearReportErrors();
+
+    const user = getCurrentUser();
+    if (!user || !listingId) {
+      closeReportModal();
+      const next = encodeURIComponent(location.pathname + location.search);
+      location.href = `/pages/login.html?next=${next}`;
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = t("product.reportSubmitting");
+
+    const res = await reportListing(listingId, user.id, {
+      reason: reasonInput.value,
+    });
+
+    if (!res.ok) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = t("product.reportSubmit");
+      for (const [key, msg] of Object.entries(res.error.fieldErrors ?? {})) {
+        const el = form.querySelector(`[data-err='${key}']`);
+        if (el) el.textContent = msg;
+      }
+      errorBanner.textContent = res.error.message ?? t("product.reportFailed");
+      errorBanner.hidden = false;
+      return;
+    }
+
+    reportSubmitted = true;
+    closeReportModal();
+    toast("success", t("product.reportSubmitted"));
+    renderPage();
+  });
+
+  reportModalEl._open = () => {
+    clearReportErrors();
+    reasonInput.value = "";
+    syncReportModalCopy();
+    submitBtn.disabled = false;
+    reportModalEl.hidden = false;
+    document.body.classList.add("nav-open");
+    dialog.focus();
+    reasonInput.focus();
+  };
+
+  return reportModalEl;
+}
+
+function openReportModal() {
+  const user = getCurrentUser();
+  if (!user) {
+    const next = encodeURIComponent(location.pathname + location.search);
+    location.href = `/pages/login.html?next=${next}`;
+    return;
+  }
+
+  ensureReportModal()._open();
+}
 
 async function loadListing() {
   listingId = readListingIdFromUrl();
@@ -231,6 +368,18 @@ function renderPage() {
           </div>
 
           ${
+            !canManage
+              ? `
+            <div class="product-report-row">
+              <button class="btn btn-ghost btn-sm product-report-btn" type="button" data-report-listing ${reportSubmitted ? "disabled" : ""}>
+                ${reportSubmitted ? t("product.reportSent") : t("product.reportListing")}
+              </button>
+            </div>
+          `
+              : ""
+          }
+
+          ${
             canManage
               ? `
             <div style="display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1rem;">
@@ -334,6 +483,11 @@ function renderPage() {
       descToggle.textContent = t("product.readMore");
     }
   });
+
+  const reportBtn = root.querySelector("[data-report-listing]");
+  if (reportBtn && !reportSubmitted) {
+    reportBtn.addEventListener("click", openReportModal);
+  }
 
   const deleteBtn = root.querySelector("[data-delete]");
   if (deleteBtn && canManage) {
@@ -485,5 +639,6 @@ function renderPage() {
 loadListing();
 onLanguageChange(() => {
   translatePageHead("product.pageTitle");
+  syncReportModalCopy();
   if (listing) renderPage();
 });

@@ -170,6 +170,97 @@
   margin-bottom: 0.15rem;
 }
 
+.product-report-row {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.product-report-btn {
+  color: var(--color-muted);
+  font-size: var(--text-sm);
+  padding-inline: 0.65rem;
+}
+
+.product-report-btn:not(:disabled):hover {
+  color: var(--color-danger);
+}
+
+.report-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 15, 25, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: productModalFadeIn 180ms ease-out both;
+}
+
+.report-modal-backdrop[hidden] {
+  display: none;
+}
+
+@keyframes productModalFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.report-modal-card {
+  width: 100%;
+  max-width: 440px;
+  background: var(--glass-bg-nav);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 1.75rem 1.6rem;
+  box-shadow: var(--glass-shadow-hover);
+  animation: productModalSlideUp 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  position: relative;
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+}
+
+@keyframes productModalSlideUp {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.report-modal-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 20px 20px 0 0;
+  background: linear-gradient(90deg, transparent, rgba(115, 215, 0, 0.9) 40%, rgba(115, 215, 0, 0.5) 70%, transparent);
+}
+
+.report-modal-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--color-navy);
+}
+
+.report-modal-desc {
+  margin: 0 0 1rem;
+  font-size: var(--text-sm);
+}
+
+.report-modal-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+.report-modal-actions .btn {
+  flex: 1;
+}
+
 @media (min-width: 920px) {
   .product-layout {
     grid-template-columns: 1.2fr 0.8fr;
