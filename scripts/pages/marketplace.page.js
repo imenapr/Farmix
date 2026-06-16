@@ -514,6 +514,11 @@ if (root) {
   // ── Order modal (injected once) ─────────────────────────────────────
   const orderModal = document.createElement("div");
   orderModal.className = "order-modal-backdrop";
+  orderModal.setAttribute("role", "dialog");
+  orderModal.setAttribute("aria-modal", "true");
+  orderModal.setAttribute("aria-labelledby", "om-title");
+  orderModal.setAttribute("aria-describedby", "om-meta");
+  orderModal.setAttribute("aria-hidden", "true");
   orderModal.style.display = "none";
   orderModal.innerHTML = `
     <div class="order-modal-card">
@@ -532,14 +537,19 @@ if (root) {
       <div class="order-modal-total-label">${t("common.total")}</div>
       <div class="order-modal-total-val" id="om-total">$0.00</div>
       <div class="order-modal-actions">
-        <button class="btn btn-ghost" id="om-cancel">${t("common.cancel")}</button>
-        <button class="btn btn-primary" id="om-confirm">${t("marketplace.confirmOrder")}</button>
+        <button class="btn btn-ghost" id="om-cancel" type="button">${t("common.cancel")}</button>
+        <button class="btn btn-primary" id="om-confirm" type="button">${t("marketplace.confirmOrder")}</button>
       </div>
     </div>
   `;
   document.body.appendChild(orderModal);
 
   let omListingId = null, omPricePerUnit = 0, omMaxQty = 0, omUnit = "";
+
+  function closeOrderModal() {
+    orderModal.style.display = "none";
+    orderModal.setAttribute("aria-hidden", "true");
+  }
 
   function updateOrderTotal() {
     const qty = Math.max(1, Math.min(omMaxQty, parseInt(document.getElementById("om-qty").value) || 1));
@@ -560,12 +570,16 @@ if (root) {
     qtyInput.value = 1;
     updateOrderTotal();
     orderModal.style.display = "flex";
+    orderModal.setAttribute("aria-hidden", "false");
     setTimeout(() => qtyInput.focus(), 60);
   }
 
   document.getElementById("om-qty").addEventListener("input", updateOrderTotal);
-  document.getElementById("om-cancel").addEventListener("click", () => { orderModal.style.display = "none"; });
-  orderModal.addEventListener("click", (e) => { if (e.target === orderModal) orderModal.style.display = "none"; });
+  document.getElementById("om-cancel").addEventListener("click", closeOrderModal);
+  orderModal.addEventListener("click", (e) => { if (e.target === orderModal) closeOrderModal(); });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && orderModal.style.display !== "none") closeOrderModal();
+  });
 
   document.getElementById("om-confirm").addEventListener("click", async () => {
     const qty = parseInt(document.getElementById("om-qty").value) || 1;
@@ -588,7 +602,7 @@ if (root) {
       return;
     }
 
-    orderModal.style.display = "none";
+    closeOrderModal();
     toast("success", t("marketplace.orderPlaced", { qty, unit: omUnit, title: result.data.title }));
 
     // Update the card in-place: refresh stock display and disable button if exhausted
@@ -626,6 +640,12 @@ if (root) {
       btn.className = "btn-order";
       btn.type = "button";
       btn.textContent = qty > 0 ? t("marketplace.addToOrder") : t("marketplace.outOfStock");
+      btn.setAttribute(
+        "aria-label",
+        qty > 0
+          ? `${t("marketplace.addToOrder")}: ${listing.title}`
+          : `${listing.title} — ${t("marketplace.outOfStock")}`,
+      );
       btn.disabled = qty <= 0;
       wrap.appendChild(btn);
       card.appendChild(wrap);

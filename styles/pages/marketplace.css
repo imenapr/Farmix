@@ -66,7 +66,8 @@
   pointer-events: none;
   z-index: 2;
 }
-.listing-card:hover .listing-order-wrap {
+.listing-card:hover .listing-order-wrap,
+.listing-card:focus-within .listing-order-wrap {
   opacity: 1;
   transform: translateY(0);
   pointer-events: auto;
@@ -209,6 +210,18 @@
   gap: 0.5rem;
   min-height: 44px;
   margin-bottom: 0.65rem;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .listing-card {
+    padding-bottom: 3.4rem;
+  }
+
+  .listing-order-wrap {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
 }
 
 @media (max-width: 919px) {
