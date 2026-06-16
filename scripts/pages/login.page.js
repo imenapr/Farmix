@@ -1,8 +1,9 @@
 import { boot } from "../app/boot.js";
 import { login } from "../app/auth-state.js";
 import { toast, qs, setText } from "../app/ui.js";
-import { t, onLanguageChange } from "../app/i18n.js";
+import { initLanguageFromUrl, t, onLanguageChange, getCurrentLang } from "../app/i18n.js";
 
+initLanguageFromUrl();
 boot();
 
 const root = document.getElementById("login-root");
@@ -43,7 +44,7 @@ function render() {
           </div>
 
           <p class="auth-forgot">
-            <a href="/pages/forgot-password.html">${t("auth.login.forgotPassword")}</a>
+            <a href="/pages/forgot-password.html?lang=${getCurrentLang()}">${t("auth.login.forgotPassword")}</a>
           </p>
 
           <button class="btn btn-primary btn-full" type="submit" data-submit>${t("auth.login.button")}</button>

@@ -73,15 +73,3 @@ export async function placeOrder(buyerId, listingId, quantity) {
   order.unit = listing.unit;
   return ok(order);
 }
-
-export async function listOrdersForUser(userId) {
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("orders")
-    .select("*")
-    .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`)
-    .order("created_at", { ascending: false });
-
-  if (error) return err("DB_ERROR", error.message);
-  return ok((data ?? []).map(keysToCamel));
-}

@@ -3,15 +3,13 @@
  * Never import auth.service.js directly from components/pages.
  */
 export {
-  getAuthState,
-  subscribeToAuth,
   login,
   signup,
   logout,
   requestPasswordReset,
+  sendPasswordResetEmail,
   completePasswordReset,
   waitForRecoverySession,
   getCurrentUser,
-  refreshCurrentUser,
   initAppState,
 } from "./state.js";

@@ -1,8 +1,9 @@
 import { boot } from "../app/boot.js";
 import { completePasswordReset, waitForRecoverySession } from "../app/auth-state.js";
 import { toast, qs, setText } from "../app/ui.js";
-import { t, onLanguageChange } from "../app/i18n.js";
+import { initLanguageFromUrl, getCurrentLang, t, onLanguageChange } from "../app/i18n.js";
 
+initLanguageFromUrl();
 boot();
 
 const root = document.getElementById("reset-password-root");
@@ -104,7 +105,7 @@ function mountForm() {
     }
 
     toast("success", t("auth.reset.success"));
-    window.location.href = "/pages/login.html";
+    window.location.href = `/pages/login.html?lang=${getCurrentLang()}`;
   });
 }
 

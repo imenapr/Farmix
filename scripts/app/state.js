@@ -3,15 +3,14 @@
  * Components must NOT import Supabase or legacy db modules directly.
  */
 
-import { on } from "./events.js";
 import {
   initAuthSession,
   getCurrentUser as getAuthUser,
   login as authLogin,
   signup as authSignup,
   logout as authLogout,
-  refreshCurrentUser as authRefresh,
   requestPasswordReset as authRequestPasswordReset,
+  sendPasswordResetEmail as authSendPasswordResetEmail,
   completePasswordReset as authCompletePasswordReset,
   waitForRecoverySession as authWaitForRecoverySession,
   watchSession,
@@ -19,23 +18,6 @@ import {
 import { getListingById as getListingByIdSvc, getUserListings as getUserListingsSvc, searchListings as searchListingsSvc, getTrendingListings as getTrendingListingsSvc } from "../services/listings.service.js";
 
 let initialized = false;
-
-/** @typedef {{ isLoggedIn: boolean, userRole: string, user: object | null }} AuthState */
-
-export function getAuthState() {
-  const user = getAuthUser();
-  return {
-    isLoggedIn: Boolean(user),
-    userRole: user?.role ?? "guest",
-    user: user ?? null,
-  };
-}
-
-/** @param {(state: AuthState) => void} fn */
-export function subscribeToAuth(fn) {
-  fn(getAuthState());
-  return on("auth:changed", () => fn(getAuthState()));
-}
 
 export async function initAppState() {
   if (initialized) return;
@@ -60,6 +42,10 @@ export async function requestPasswordReset(input) {
   return authRequestPasswordReset(input);
 }
 
+export async function sendPasswordResetEmail(email) {
+  return authSendPasswordResetEmail(email);
+}
+
 export async function completePasswordReset(input) {
   return authCompletePasswordReset(input);
 }
@@ -70,11 +56,6 @@ export async function waitForRecoverySession(timeoutMs) {
 
 export function getCurrentUser() {
   return getAuthUser();
-}
-
-/** Force a fresh Supabase role/profile fetch, bypassing the TTL cache. */
-export async function refreshCurrentUser() {
-  return authRefresh();
 }
 
 export async function searchListings(filters) {

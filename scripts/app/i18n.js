@@ -1049,6 +1049,16 @@ export function setLanguage(lang) {
   return next;
 }
 
+/** Apply ?lang=en|ka from the URL to farmix.lang (e.g. password-reset email links). */
+export function initLanguageFromUrl(search = null) {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(search ?? window.location.search);
+  const lang = String(params.get("lang") ?? "").toLowerCase();
+  if (!SUPPORTED_LANGS.has(lang)) return null;
+  setLanguage(lang);
+  return lang;
+}
+
 export function toggleLanguage() {
   const next = getCurrentLang() === "en" ? "ka" : "en";
   return setLanguage(next);

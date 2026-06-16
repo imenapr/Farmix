@@ -221,25 +221,3 @@ export async function listInquiriesForSeller(sellerId) {
   if (error) return err("DB_ERROR", error.message);
   return ok((data ?? []).map(keysToCamel));
 }
-
-export async function markMessageRead(actorId, messageId) {
-  const supabase = getSupabase();
-  const { data: msg, error: fetchErr } = await supabase
-    .from("messages")
-    .select("recipient_id")
-    .eq("id", messageId)
-    .maybeSingle();
-
-  if (fetchErr || !msg) return err("NOT_FOUND", t("service.messageNotFound", { default: "Message not found." }));
-  if (msg.recipient_id !== actorId) return err("FORBIDDEN", t("service.notAllowed", { default: "Not allowed." }));
-
-  const { data, error } = await supabase
-    .from("messages")
-    .update({ read_at: new Date().toISOString() })
-    .eq("id", messageId)
-    .select()
-    .single();
-
-  if (error) return err("DB_ERROR", error.message);
-  return ok(keysToCamel(data));
-}

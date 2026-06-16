@@ -24,6 +24,3 @@ export function getSupabase() {
   }
   return client;
 }
-
-/** @deprecated Use getSupabase() — kept for gradual migration */
-export const supabase = getSupabase();

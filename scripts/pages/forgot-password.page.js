@@ -1,8 +1,9 @@
 import { boot } from "../app/boot.js";
 import { requestPasswordReset } from "../app/auth-state.js";
 import { qs, setText } from "../app/ui.js";
-import { t, onLanguageChange } from "../app/i18n.js";
+import { initLanguageFromUrl, t, onLanguageChange } from "../app/i18n.js";
 
+initLanguageFromUrl();
 boot();
 
 const root = document.getElementById("forgot-password-root");

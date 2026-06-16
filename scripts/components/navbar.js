@@ -13,8 +13,7 @@ import {
 
 // ─── Role state ─────────────────────────────────────────────────────────────
 let _role = "guest";
-export const getRole = () => _role;
-export const setRole = (next) => { _role = next ?? "guest"; };
+const setRole = (next) => { _role = next ?? "guest"; };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function roleBadgeClass(role) {

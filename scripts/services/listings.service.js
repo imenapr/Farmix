@@ -192,9 +192,6 @@ export async function getUserListings(userId) {
   return ok(withRatings);
 }
 
-/** @deprecated alias */
-export const listSellerListings = getUserListings;
-
 export async function createListing(input, sellerId, userRole = ROLES.farmer) {
   if (userRole !== ROLES.farmer && userRole !== ROLES.admin) {
     return err("FORBIDDEN", "Only farmers can create listings.");
@@ -274,30 +271,5 @@ export async function archiveListingAsOwnerOrAdmin(listingId, userId, userRole) 
 
   invalidateCache(LISTINGS_CACHE_PREFIX);
   emit("listing:archived", { listingId });
-  return ok(null);
-}
-
-export async function markListingAsSold(listingId, userId, userRole) {
-  const supabase = getSupabase();
-  const { data: existing, error: fetchError } = await supabase
-    .from("listings")
-    .select("seller_id")
-    .eq("id", listingId)
-    .maybeSingle();
-
-  if (fetchError || !existing) return err("NOT_FOUND", "Listing not found");
-  if (existing.seller_id !== userId && userRole !== "admin") {
-    return err("FORBIDDEN", "You don't have permission");
-  }
-
-  const { error } = await supabase
-    .from("listings")
-    .update({ status: "sold", updated_at: new Date().toISOString() })
-    .eq("id", listingId);
-
-  if (error) return err("DB_ERROR", error.message);
-
-  invalidateCache(LISTINGS_CACHE_PREFIX);
-  emit("listing:sold", { listingId });
   return ok(null);
 }

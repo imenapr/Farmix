@@ -1,5 +1,5 @@
 import { ROLES } from "../app/config.js";
-import { CATEGORIES } from "./seed.js";
+import { CATEGORIES } from "./categories-data.js";
 import { t } from "../app/i18n.js";
 
 const ALLOWED_CATEGORY_IDS = new Set(CATEGORIES.map((c) => c.id));

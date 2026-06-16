@@ -1,4 +1,4 @@
-import { CATEGORIES as SEED_CATEGORIES } from "./seed.js";
+import { CATEGORIES as SEED_CATEGORIES } from "./categories-data.js";
 
 /** Seed categories always appear; optional admin overrides in localStorage are merged by id. */
 export function getCategories() {

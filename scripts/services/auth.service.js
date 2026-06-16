@@ -7,7 +7,7 @@ import { authEmailFromPhone } from "../lib/auth-email.js";
 import { createNotification } from "./notifications.service.js";
 import { findEmailByPhone } from "./users.service.js";
 import { ROLES } from "../app/config.js";
-import { t } from "../app/i18n.js";
+import { getCurrentLang, t } from "../app/i18n.js";
 
 /** @typedef {{ ok: true, data: any } | { ok: false, error: { code: string, message: string, fieldErrors?: Record<string,string> } }} Result */
 
@@ -93,19 +93,6 @@ async function fetchUserProfile(userId) {
 function getCachedProfile(userId) {
   const entry = readAuthCache();
   return isCacheFresh(entry, userId) ? entry.user : null;
-}
-
-/** Force-refresh the cached profile/role from Supabase (e.g. after a role change). */
-export async function refreshCurrentUser() {
-  const supabase = getSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user?.id) {
-    setCurrentUserInternal(null);
-    return null;
-  }
-  const profile = await fetchUserProfile(session.user.id);
-  setCurrentUserInternal(profile);
-  return profile;
 }
 
 async function upsertUserProfile(row) {
@@ -280,11 +267,31 @@ export async function login(input) {
   return ok({ user: profile });
 }
 
-function passwordResetRedirectUrl() {
+function passwordResetRedirectUrl(lang) {
+  const resolved = lang === "ka" ? "ka" : "en";
   if (typeof window !== "undefined" && window.location?.origin) {
-    return `${window.location.origin}/pages/reset-password.html`;
+    return `${window.location.origin}/pages/reset-password.html?lang=${resolved}`;
   }
   return undefined;
+}
+
+/**
+ * Sends a password reset email using the user's current UI language.
+ * redirectTo includes ?lang=en|ka so Supabase email templates can branch on
+ * {{ .RedirectTo }} and the reset page opens in the same language.
+ */
+export async function sendPasswordResetEmail(email) {
+  const lang = getCurrentLang();
+  const supabase = getSupabase();
+  const { error } = await supabase.auth.resetPasswordForEmail(String(email).trim(), {
+    redirectTo: passwordResetRedirectUrl(lang),
+  });
+
+  if (error) {
+    return err("AUTH_ERROR", error.message || t("auth.forgot.failed"));
+  }
+
+  return ok(null);
 }
 
 export async function requestPasswordReset(input) {
@@ -297,16 +304,7 @@ export async function requestPasswordReset(input) {
     );
   }
 
-  const supabase = getSupabase();
-  const { error } = await supabase.auth.resetPasswordForEmail(v.value, {
-    redirectTo: passwordResetRedirectUrl(),
-  });
-
-  if (error) {
-    return err("AUTH_ERROR", error.message || t("auth.forgot.failed"));
-  }
-
-  return ok(null);
+  return sendPasswordResetEmail(v.value);
 }
 
 export async function completePasswordReset(input) {
@@ -358,11 +356,6 @@ export async function waitForRecoverySession(timeoutMs = 4000) {
       finish(err("AUTH_REQUIRED", t("auth.reset.invalidLink")));
     }, timeoutMs);
   });
-}
-
-export function requireAuth() {
-  if (!currentUser) return err("AUTH_REQUIRED", t("common.loginRequired"));
-  return ok({ user: currentUser });
 }
 
 export function watchSession() {

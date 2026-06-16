@@ -1,8 +1,7 @@
 import { ROLES } from "../app/config.js";
 import { getCurrentUser } from "./auth.service.js";
 import { getSupabase } from "../lib/supabase.js";
-import { userFromDb, listingFromDb, keysToCamel } from "../lib/transform.js";
-import { archiveListingAsOwnerOrAdmin } from "./listings.service.js";
+import { userFromDb, listingFromDb } from "../lib/transform.js";
 import { invalidateCache } from "../lib/cache.js";
 
 function err(code, message) {
@@ -80,40 +79,6 @@ async function updateUserFlag(userId, patch) {
   return ok(userFromDb(data));
 }
 
-export async function changeUserRole(userId, newRole) {
-  const guard = requireAdmin();
-  if (!guard.ok) return guard;
-  if (!Object.values(ROLES).includes(newRole)) return err("INVALID_ROLE", "Invalid role.");
-
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("users")
-    .update({ role: newRole, updated_at: new Date().toISOString() })
-    .eq("id", userId)
-    .select()
-    .single();
-
-  if (error || !data) return err("NOT_FOUND", "User not found.");
-  return ok(userFromDb(data));
-}
-
-export async function verifyFarmer(userId) {
-  const guard = requireAdmin();
-  if (!guard.ok) return guard;
-
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("users")
-    .update({ verified: true, updated_at: new Date().toISOString() })
-    .eq("id", userId)
-    .eq("role", ROLES.farmer)
-    .select()
-    .single();
-
-  if (error || !data) return err("NOT_FOUND", "Farmer not found.");
-  return ok(userFromDb(data));
-}
-
 export async function listListings(opts = { includeArchived: true }) {
   const guard = requireAdmin();
   if (!guard.ok) return guard;
@@ -152,25 +117,4 @@ export async function takeDownListing(listingId, reason = "") {
   if (error || !data) return err("NOT_FOUND", "Listing not found.");
   invalidateCache("listings:");
   return ok(listingFromDb(data));
-}
-
-export async function archiveListingAsAdmin(listingId) {
-  const guard = requireAdmin();
-  if (!guard.ok) return guard;
-  const user = guard.data.user;
-  return archiveListingAsOwnerOrAdmin(listingId, user.id, user.role);
-}
-
-export async function listOrdersSummary() {
-  const guard = requireAdmin();
-  if (!guard.ok) return guard;
-
-  const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("orders")
-    .select("status, total_price, created_at")
-    .order("created_at", { ascending: true });
-
-  if (error) return err("DB_ERROR", error.message);
-  return ok((data ?? []).map(keysToCamel));
 }

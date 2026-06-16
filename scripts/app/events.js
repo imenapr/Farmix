@@ -15,14 +15,6 @@ export function on(eventName, handler) {
   return () => off(eventName, handler);
 }
 
-export function once(eventName, handler) {
-  const offFn = on(eventName, (payload) => {
-    offFn();
-    handler(payload);
-  });
-  return offFn;
-}
-
 export function off(eventName, handler) {
   const set = listeners.get(eventName);
   if (!set) return;
