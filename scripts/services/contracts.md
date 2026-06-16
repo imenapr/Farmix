@@ -285,6 +285,45 @@ type MarketplaceFilters = {
 
 ---
 
+## `orders.service.js`
+
+### `placeOrder(buyerId, listingId, quantity)`
+- **Auth**
+  - requires an authenticated buyer session
+  - `buyerId` must match the currently authenticated user id (prevents account spoofing)
+  - role must be `business` or `consumer`
+- **Validation**
+  - quantity must be a whole number >= 1
+  - listing must be active and not owned by the buyer
+- **Success**
+  - `Order`
+- **Errors**
+  - AUTH_REQUIRED, FORBIDDEN, INVALID_QTY, INSUFFICIENT_STOCK, NOT_FOUND
+
+### `updateOrderStatus(orderId, status)`
+- **Auth**
+  - seller owning the order or admin
+- **Success**
+  - `Order`
+- **Errors**
+  - AUTH_REQUIRED, FORBIDDEN, NOT_FOUND, INVALID_STATUS
+
+### `getOrdersForSeller(sellerId)`
+- **Success**
+  - `Order[]` (sorted newest first)
+
+### `getOrdersForBuyer(buyerId)`
+- **Success**
+  - `Order[]` (sorted newest first)
+
+### `getAllOrders()`
+- **Auth**
+  - admin required
+- **Success**
+  - `Order[]` (sorted newest first)
+
+---
+
 ## `admin.service.js`
 
 ### `requireAdmin()`

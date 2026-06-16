@@ -1,4 +1,5 @@
 import { getSupabase } from "../lib/supabase.js";
+import { ROLES } from "../app/config.js";
 import { getListingById } from "./listings.service.js";
 import { getCurrentUser } from "./auth.service.js";
 import { keysToCamel } from "../lib/transform.js";
@@ -14,7 +15,13 @@ function ok(data) {
 
 export async function placeOrder(buyerId, listingId, quantity) {
   const user = getCurrentUser();
-  if (!user || user.id !== buyerId) return err("AUTH_REQUIRED", "Login required.");
+  if (!user) return err("AUTH_REQUIRED", "Login required.");
+  if (String(buyerId ?? "") !== String(user.id)) {
+    return err("FORBIDDEN", "You can only place orders for your own account.");
+  }
+  if (user.role === ROLES.farmer || user.role === ROLES.admin) {
+    return err("FORBIDDEN", "Only buyers can place orders.");
+  }
 
   const qty = Math.max(1, Math.floor(Number(quantity)));
   if (!Number.isFinite(qty)) return err("VALIDATION_FAILED", "Invalid quantity.");
@@ -24,7 +31,7 @@ export async function placeOrder(buyerId, listingId, quantity) {
 
   const listing = listingRes.data;
   if (listing.status !== "active") return err("CONFLICT", "This listing is no longer available.");
-  if (listing.sellerId === buyerId) return err("FORBIDDEN", "You cannot order your own listing.");
+  if (listing.sellerId === user.id) return err("FORBIDDEN", "You cannot order your own listing.");
   if (qty > listing.quantityAvailable) {
     return err("VALIDATION_FAILED", `Only ${listing.quantityAvailable} available.`);
   }
@@ -37,7 +44,7 @@ export async function placeOrder(buyerId, listingId, quantity) {
     .from("orders")
     .insert({
       listing_id: listingId,
-      buyer_id: buyerId,
+      buyer_id: user.id,
       seller_id: listing.sellerId,
       quantity: qty,
       price_per_unit: listing.price,
