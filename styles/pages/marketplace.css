@@ -89,6 +89,10 @@
   z-index: 3;
 }
 .btn-order:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 8px 22px rgba(115,215,0,0.42); }
+.btn-order:focus-visible {
+  outline: 3px solid rgba(115,215,0,0.36);
+  outline-offset: 3px;
+}
 .btn-order:disabled {
   background: var(--dash-surface-3);
   color: var(--color-subtle);
@@ -218,6 +222,10 @@
   }
 
   .listing-order-wrap {
+    position: static;
+    padding: 0 0.85rem 0.85rem;
+    background: transparent;
+    border-radius: 0;
     opacity: 1;
     transform: none;
     pointer-events: auto;

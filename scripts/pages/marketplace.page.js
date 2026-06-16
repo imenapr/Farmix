@@ -262,7 +262,7 @@ if (root) {
         openGuestGate();
         return;
       }
-      openOrderModal(listing);
+      openOrderModal(listing, btn);
     });
   }
 
@@ -514,20 +514,16 @@ if (root) {
   // ── Order modal (injected once) ─────────────────────────────────────
   const orderModal = document.createElement("div");
   orderModal.className = "order-modal-backdrop";
-  orderModal.setAttribute("role", "dialog");
-  orderModal.setAttribute("aria-modal", "true");
-  orderModal.setAttribute("aria-labelledby", "om-title");
-  orderModal.setAttribute("aria-describedby", "om-meta");
   orderModal.setAttribute("aria-hidden", "true");
   orderModal.style.display = "none";
   orderModal.innerHTML = `
-    <div class="order-modal-card">
+    <div class="order-modal-card" role="dialog" aria-modal="true" aria-labelledby="om-title" aria-describedby="om-meta" tabindex="-1">
       <h3 class="order-modal-title" id="om-title">${t("marketplace.orderProduct")}</h3>
       <p class="order-modal-meta" id="om-meta"></p>
       <div class="order-modal-row">
         <div class="order-modal-field">
           <label for="om-qty">${t("marketplace.quantity")}</label>
-          <input class="order-qty-input" id="om-qty" type="number" min="1" value="1" />
+          <input class="order-qty-input" id="om-qty" type="number" min="1" step="1" value="1" aria-describedby="om-avail" />
         </div>
         <div class="order-modal-field">
           <label>${t("marketplace.availableLabel")}</label>
@@ -545,10 +541,13 @@ if (root) {
   document.body.appendChild(orderModal);
 
   let omListingId = null, omPricePerUnit = 0, omMaxQty = 0, omUnit = "";
+  let lastOrderTrigger = null;
 
   function closeOrderModal() {
     orderModal.style.display = "none";
     orderModal.setAttribute("aria-hidden", "true");
+    if (lastOrderTrigger && document.contains(lastOrderTrigger)) lastOrderTrigger.focus();
+    lastOrderTrigger = null;
   }
 
   function updateOrderTotal() {
@@ -557,7 +556,8 @@ if (root) {
     document.getElementById("om-total").textContent = `$${total}`;
   }
 
-  function openOrderModal(listing) {
+  function openOrderModal(listing, triggerEl = null) {
+    lastOrderTrigger = triggerEl;
     omListingId   = listing.id;
     omPricePerUnit = listing.price;
     omMaxQty      = listing.quantityAvailable;
