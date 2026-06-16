@@ -52,6 +52,7 @@ function renderProfile() {
     <div class="pill">${escapeHtml(user.role)}</div>
     <h2 style="margin:0.5rem 0 0; letter-spacing:-0.01em;">${escapeHtml(user.name)}</h2>
     <div class="muted">${escapeHtml(user.location)}</div>
+    ${user.farmName ? `<div class="muted">${t("profile.farm")}: <strong>${escapeHtml(user.farmName)}</strong></div>` : ""}
     ${user.companyName ? `<div class="muted">${t("profile.business")}: <strong>${escapeHtml(user.companyName)}</strong></div>` : ""}
     ${user.phone ? `<div class="muted">${t("common.phone")}: <strong>${escapeHtml(user.phone)}</strong></div>` : ""}
     ${user.bio ? `<p class="muted" style="margin:0.6rem 0 0; white-space:pre-wrap;">${escapeHtml(user.bio)}</p>` : ""}

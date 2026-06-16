@@ -154,7 +154,7 @@ export async function signup(input) {
   const v = validateSignup(input);
   if (!v.ok) return err("VALIDATION_FAILED", t("service.fixHighlighted", { default: "Fix the highlighted fields." }), v.fieldErrors);
 
-  const { email, password, role, name, location, phone, companyName } = v.value;
+  const { email, password, role, name, location, phone, farmName, companyName } = v.value;
   if (![ROLES.farmer, ROLES.business, ROLES.consumer].includes(role)) {
     return err("VALIDATION_FAILED", t("service.roleInvalid", { default: "Select a valid role." }));
   }
@@ -207,6 +207,7 @@ export async function signup(input) {
     name,
     location,
     phone: phone || null,
+    farm_name: farmName || null,
     company_name: companyName || null,
     created_at: now,
     updated_at: now,

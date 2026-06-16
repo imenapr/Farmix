@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   name text NOT NULL,
   phone text,
   role text NOT NULL DEFAULT 'consumer' CHECK (role IN ('farmer', 'business', 'consumer', 'admin')),
+  farm_name text,
   company_name text,
   location text NOT NULL,
   bio text,

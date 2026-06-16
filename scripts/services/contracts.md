@@ -32,6 +32,7 @@ type UserPublic = {
   location: string;
   bio?: string;
   companyName?: string;
+  farmName?: string;
   createdAt: number;
   updatedAt: number;
 };

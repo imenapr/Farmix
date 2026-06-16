@@ -33,6 +33,7 @@ function renderAccountForm() {
   if (!accountUser || !accountRecord) return;
 
   const record = accountRecord;
+  const isFarmer = record.role === "farmer";
   const isBusiness = record.role === "business";
   const roleLabel = {
     farmer: t("nav.role.farmer"),
@@ -76,6 +77,16 @@ function renderAccountForm() {
 
         <div class="grid" style="grid-template-columns: 1fr; gap: 0.85rem;">
           ${
+            isFarmer
+              ? `
+          <label class="stack" style="gap:0.35rem;">
+            <span style="font-weight: 700;">${t("account.farmNameOptional")}</span>
+            <input class="input" name="farmName" />
+            <span class="error-text" data-err="farmName"></span>
+          </label>`
+              : ""
+          }
+          ${
             isBusiness
               ? `
           <label class="stack" style="gap:0.35rem;">
@@ -110,6 +121,7 @@ function renderAccountForm() {
   setVal("location", record.location);
   setVal("phone", record.phone);
   setVal("bio", record.bio);
+  setVal("farmName", record.farmName);
   setVal("companyName", record.companyName);
   restoreFormState(form, savedFormState);
 
@@ -117,7 +129,7 @@ function renderAccountForm() {
   const errForm = err("form");
 
   function clearErrors() {
-    for (const k of ["name", "location", "phone", "bio", "companyName", "form"]) setText(err(k), "");
+    for (const k of ["name", "location", "phone", "bio", "farmName", "companyName", "form"]) setText(err(k), "");
   }
 
   function setLoading(isLoading) {
@@ -136,6 +148,7 @@ function renderAccountForm() {
       location: fd.get("location"),
       phone: fd.get("phone"),
       bio: fd.get("bio"),
+      farmName: fd.get("farmName"),
       companyName: fd.get("companyName"),
     });
 
