@@ -1,5 +1,6 @@
 import { boot } from "../app/boot.js";
 import { getCurrentUser } from "../app/auth-state.js";
+import { ROLES } from "../app/config.js";
 import { getListingById } from "../app/state.js";
 import {
   escapeHtml,
@@ -15,6 +16,8 @@ import { getUserReviewForListing, submitListingReview } from "../services/review
 import { createInquiry } from "../services/messages.service.js";
 import { reportListing } from "../services/reports.service.js";
 import { getUserById } from "../services/users.service.js";
+import { placeOrder } from "../services/orders.service.js";
+import { openGuestGate } from "../components/guest-gate.js";
 import { t, onLanguageChange, translatePageHead, getCategoryLabel } from "../app/i18n.js";
 import { getCategoryById } from "../data/categories.js";
 
@@ -210,6 +213,148 @@ function ensureReportModal() {
   return reportModalEl;
 }
 
+// ── Order modal (buyers can place orders from product detail) ─────────
+let orderModalEl = null;
+let omListingId = null;
+let omPricePerUnit = 0;
+let omMaxQty = 0;
+let omUnit = "";
+let lastOrderTrigger = null;
+
+function translateOrderModal() {
+  if (!orderModalEl) return;
+  const title = orderModalEl.querySelector("#om-title");
+  if (title) title.textContent = t("marketplace.orderProduct");
+  const qtyLabel = orderModalEl.querySelector('label[for="om-qty"]');
+  if (qtyLabel) qtyLabel.textContent = t("marketplace.quantity");
+  const availLabels = orderModalEl.querySelectorAll(".order-modal-field label");
+  if (availLabels[1]) availLabels[1].textContent = t("marketplace.availableLabel");
+  const totalLabel = orderModalEl.querySelector(".order-modal-total-label");
+  if (totalLabel) totalLabel.textContent = t("common.total");
+  const cancelBtn = orderModalEl.querySelector("#om-cancel");
+  if (cancelBtn) cancelBtn.textContent = t("common.cancel");
+  const confirmBtn = orderModalEl.querySelector("#om-confirm");
+  if (confirmBtn && !confirmBtn.disabled) confirmBtn.textContent = t("marketplace.confirmOrder");
+}
+
+function ensureOrderModal() {
+  if (orderModalEl) {
+    translateOrderModal();
+    return orderModalEl;
+  }
+
+  orderModalEl = document.createElement("div");
+  orderModalEl.className = "order-modal-backdrop";
+  orderModalEl.setAttribute("aria-hidden", "true");
+  orderModalEl.style.display = "none";
+  orderModalEl.innerHTML = `
+    <div class="order-modal-card" role="dialog" aria-modal="true" aria-labelledby="om-title" aria-describedby="om-meta" tabindex="-1">
+      <h3 class="order-modal-title" id="om-title">${t("marketplace.orderProduct")}</h3>
+      <p class="order-modal-meta" id="om-meta"></p>
+      <div class="order-modal-row">
+        <div class="order-modal-field">
+          <label for="om-qty">${t("marketplace.quantity")}</label>
+          <input class="order-qty-input" id="om-qty" type="number" min="1" step="1" value="1" aria-describedby="om-avail" />
+        </div>
+        <div class="order-modal-field">
+          <label>${t("marketplace.availableLabel")}</label>
+          <div id="om-avail" style="font-size:1rem;font-weight:700;padding-top:0.4rem;color:var(--color-navy);">—</div>
+        </div>
+      </div>
+      <div class="order-modal-total-label">${t("common.total")}</div>
+      <div class="order-modal-total-val" id="om-total">$0.00</div>
+      <div class="order-modal-actions">
+        <button class="btn btn-ghost" id="om-cancel" type="button">${t("common.cancel")}</button>
+        <button class="btn btn-primary" id="om-confirm" type="button">${t("marketplace.confirmOrder")}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(orderModalEl);
+  translateOrderModal();
+
+  function closeOrderModal() {
+    orderModalEl.style.display = "none";
+    orderModalEl.setAttribute("aria-hidden", "true");
+    if (lastOrderTrigger && document.contains(lastOrderTrigger)) lastOrderTrigger.focus();
+    lastOrderTrigger = null;
+  }
+
+  function updateOrderTotal() {
+    const qty = Math.max(1, Math.min(omMaxQty, parseInt(orderModalEl.querySelector("#om-qty").value, 10) || 1));
+    const total = (qty * omPricePerUnit).toFixed(2);
+    orderModalEl.querySelector("#om-total").textContent = `$${total}`;
+  }
+
+  orderModalEl.querySelector("#om-qty").addEventListener("input", updateOrderTotal);
+  orderModalEl.querySelector("#om-cancel").addEventListener("click", closeOrderModal);
+  orderModalEl.addEventListener("click", (e) => {
+    if (e.target === orderModalEl) closeOrderModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && orderModalEl.style.display !== "none") closeOrderModal();
+  });
+
+  orderModalEl.querySelector("#om-confirm").addEventListener("click", async () => {
+    const qty = parseInt(orderModalEl.querySelector("#om-qty").value, 10) || 1;
+    const curUser = getCurrentUser();
+    if (!curUser) {
+      openGuestGate();
+      return;
+    }
+
+    const btn = orderModalEl.querySelector("#om-confirm");
+    btn.disabled = true;
+    btn.textContent = t("marketplace.placing");
+
+    const result = await placeOrder(curUser.id, omListingId, qty);
+    btn.disabled = false;
+    btn.textContent = t("marketplace.confirmOrder");
+
+    if (!result.ok) {
+      toast("error", result.error.message);
+      return;
+    }
+
+    closeOrderModal();
+    toast("success", t("marketplace.orderPlaced", { qty, unit: omUnit, title: result.data.title }));
+
+    if (listing && listing.id === omListingId) {
+      const newQty = omMaxQty - qty;
+      listing.quantityAvailable = newQty;
+      if (newQty <= 0) listing.status = "sold";
+      omMaxQty = newQty;
+      renderPage();
+    }
+  });
+
+  orderModalEl._open = (targetListing, triggerEl = null) => {
+    lastOrderTrigger = triggerEl;
+    omListingId = targetListing.id;
+    omPricePerUnit = targetListing.price;
+    omMaxQty = targetListing.quantityAvailable;
+    omUnit = targetListing.unit;
+    orderModalEl.querySelector("#om-title").textContent = targetListing.title;
+    orderModalEl.querySelector("#om-meta").textContent = `$${Number(targetListing.price).toFixed(2)} / ${targetListing.unit}`;
+    orderModalEl.querySelector("#om-avail").textContent = `${targetListing.quantityAvailable} ${targetListing.unit}`;
+    const qtyInput = orderModalEl.querySelector("#om-qty");
+    qtyInput.max = targetListing.quantityAvailable;
+    qtyInput.value = 1;
+    const total = (1 * omPricePerUnit).toFixed(2);
+    orderModalEl.querySelector("#om-total").textContent = `$${total}`;
+    orderModalEl.style.display = "flex";
+    orderModalEl.setAttribute("aria-hidden", "false");
+    setTimeout(() => qtyInput.focus(), 60);
+  };
+
+  return orderModalEl;
+}
+
+function canShowOrderCta(user, isOwner, isAdmin) {
+  if (isOwner || isAdmin) return false;
+  if (user?.role === ROLES.farmer || user?.role === ROLES.admin) return false;
+  return true;
+}
+
 function openReportModal() {
   const user = getCurrentUser();
   if (!user) {
@@ -290,6 +435,8 @@ function renderPage() {
   const isOwner = user && user.id === listing.sellerId;
   const isAdmin = user && user.role === "admin";
   const canManage = isOwner || isAdmin;
+  const showOrderCta = canShowOrderCta(user, isOwner, isAdmin) && listing.status === "active";
+  const orderQty = Number(listing.quantityAvailable ?? 0);
 
   const price = Number(listing.price).toFixed(2).replace(/\.00$/, "");
   const images = Array.isArray(listing.images) && listing.images.length ? listing.images : ["/img/logo.png"];
@@ -425,6 +572,28 @@ function renderPage() {
         </section>
 
         ${
+          showOrderCta
+            ? `
+        <section class="card pad product-order-box">
+          <h2 style="margin:0 0 0.35rem; letter-spacing:-0.01em;">${t("marketplace.orderProduct")}</h2>
+          <p class="muted" style="font-size:var(--text-sm); margin:0 0 0.75rem;">
+            ${orderQty > 0 ? t("marketplace.addToOrder") : t("marketplace.outOfStock")}
+          </p>
+          <button
+            class="btn btn-primary product-order-btn"
+            type="button"
+            data-place-order
+            ${orderQty <= 0 ? "disabled" : ""}
+            aria-label="${orderQty > 0 ? `${t("marketplace.addToOrder")}: ${listing.title}` : `${listing.title} — ${t("marketplace.outOfStock")}`}"
+          >
+            ${orderQty > 0 ? t("marketplace.addToOrder") : t("marketplace.outOfStock")}
+          </button>
+        </section>
+        `
+            : ""
+        }
+
+        ${
           user && !isOwner
             ? `
         <section class="card pad">
@@ -487,6 +656,18 @@ function renderPage() {
   const reportBtn = root.querySelector("[data-report-listing]");
   if (reportBtn && !reportSubmitted) {
     reportBtn.addEventListener("click", openReportModal);
+  }
+
+  const orderBtn = root.querySelector("[data-place-order]");
+  if (orderBtn && showOrderCta && orderQty > 0) {
+    orderBtn.addEventListener("click", () => {
+      const curUser = getCurrentUser();
+      if (!curUser) {
+        openGuestGate();
+        return;
+      }
+      ensureOrderModal()._open(listing, orderBtn);
+    });
   }
 
   const deleteBtn = root.querySelector("[data-delete]");
@@ -640,5 +821,6 @@ loadListing();
 onLanguageChange(() => {
   translatePageHead("product.pageTitle");
   syncReportModalCopy();
+  translateOrderModal();
   if (listing) renderPage();
 });

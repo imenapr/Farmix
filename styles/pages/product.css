@@ -104,6 +104,16 @@
   gap: 0.35rem;
 }
 
+.product-order-box {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.product-order-btn {
+  width: 100%;
+  justify-content: center;
+}
+
 .seller-phone-area {
   display: grid;
   gap: 0.15rem;
