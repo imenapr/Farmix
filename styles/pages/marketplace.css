@@ -14,6 +14,24 @@
   gap: 0.75rem;
 }
 
+.filters-field {
+  gap: 0.35rem;
+}
+
+.filters-label {
+  font-weight: 800;
+}
+
+.filters-hint {
+  font-size: var(--text-sm);
+}
+
+.filters-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 .filters-row {
   display: grid;
   gap: 0.65rem;
@@ -222,6 +240,74 @@
   margin-top: 1.25rem;
 }
 .order-modal-actions .btn { flex: 1; }
+
+.order-modal-avail {
+  font-size: 1rem;
+  font-weight: 700;
+  padding-top: 0.4rem;
+  color: var(--color-navy);
+}
+
+/* ─── Admin category modal ─────────────────────────────────────────── */
+.category-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(10, 15, 25, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.category-modal[hidden] {
+  display: none;
+}
+
+.category-modal-card {
+  width: min(100%, 500px);
+  padding: 1.25rem;
+  border-radius: var(--radius-md);
+  background: var(--glass-bg-nav);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow-hover);
+}
+
+.category-modal-title {
+  margin: 0 0 0.75rem;
+  font-size: var(--text-lg);
+  font-weight: 800;
+  color: var(--color-navy);
+}
+
+.category-modal-list {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.category-modal-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.category-modal-row .input {
+  flex: 1;
+}
+
+.category-modal-actions {
+  display: flex;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}
+
+.order-modal-backdrop[hidden] {
+  display: none;
+}
 
 .filters-toggle {
   display: none;

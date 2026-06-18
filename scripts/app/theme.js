@@ -10,12 +10,32 @@ function normalizeTheme(value) {
   return value === THEMES.dark ? THEMES.dark : THEMES.light;
 }
 
+function hasStoredTheme() {
+  try {
+    return Boolean(localStorage.getItem(THEME_KEY));
+  } catch {
+    return false;
+  }
+}
+
+/** System appearance when the OS/browser reports a preference; otherwise null. */
+function getSystemTheme() {
+  if (!window.matchMedia) return null;
+  if (window.matchMedia("(prefers-color-scheme: dark)").matches) return THEMES.dark;
+  if (window.matchMedia("(prefers-color-scheme: light)").matches) return THEMES.light;
+  return null;
+}
+
 function getPreferredTheme() {
   try {
     const saved = localStorage.getItem(THEME_KEY);
     if (saved) return normalizeTheme(saved);
   } catch {}
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? THEMES.dark : THEMES.light;
+
+  const system = getSystemTheme();
+  if (system) return system;
+
+  return THEMES.dark;
 }
 
 function getRoot() {
@@ -52,6 +72,20 @@ export function toggleTheme() {
 
 export function initTheme() {
   applyTheme(getPreferredTheme());
+
+  const darkMq = window.matchMedia?.("(prefers-color-scheme: dark)");
+  const lightMq = window.matchMedia?.("(prefers-color-scheme: light)");
+  if (!darkMq && !lightMq) return;
+
+  const onSystemThemeChange = () => {
+    if (hasStoredTheme()) return;
+    applyTheme(getPreferredTheme());
+  };
+
+  darkMq?.addEventListener?.("change", onSystemThemeChange);
+  lightMq?.addEventListener?.("change", onSystemThemeChange);
+  darkMq?.addListener?.(onSystemThemeChange);
+  lightMq?.addListener?.(onSystemThemeChange);
 }
 
 export function getChartThemeTokens() {
