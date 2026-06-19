@@ -150,20 +150,20 @@ function mountSignup() {
           <span class="form-error" data-err="phone"></span>
         </div>
 
-        <!-- ── Email ── -->
-        <div class="form-field">
-          ${optionalFieldLabel("sf-email", "auth.signup.email")}
-          <input class="input" id="sf-email" name="email"
-                 type="email" autocomplete="email" placeholder="${t("auth.signup.emailPlaceholder")}" />
-          <span class="form-error" data-err="email"></span>
-        </div>
-
         <!-- ── Password ── -->
         <div class="form-field">
           <label class="form-label" for="sf-password">${t("auth.password")}</label>
           <input class="input" id="sf-password" name="password"
                  type="password" autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
           <span class="form-error form-error-multiline" data-err="password"></span>
+        </div>
+
+        <!-- ── Email ── -->
+        <div class="form-field">
+          ${optionalFieldLabel("sf-email", "auth.signup.email")}
+          <input class="input" id="sf-email" name="email"
+                 type="email" autocomplete="email" placeholder="${t("auth.signup.emailPlaceholder")}" />
+          <span class="form-error" data-err="email"></span>
         </div>
 
         <button class="btn btn-primary btn-full" type="submit" data-submit>

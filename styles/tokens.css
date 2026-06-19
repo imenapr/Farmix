@@ -25,11 +25,12 @@
   --color-white: #ffffff;
   --color-bg: #ffffff;
   --color-surface: rgba(255, 255, 255, 0.90);
-  --color-border: rgba(26, 31, 54, 0.09);
+  --color-border: rgba(0, 0, 0, 0.5);
   --color-border-light: rgba(255, 255, 255, 0.78);
   --color-text: #1a1f36;
   --color-muted: rgba(26, 31, 54, 0.60);
   --color-subtle: rgba(26, 31, 54, 0.40);
+  --color-optional: rgb(252, 56, 38);
 
   /* Glass System — sharp glass on white */
   --glass-bg: rgba(255, 255, 255, 0.72);
@@ -71,7 +72,7 @@
   --radius-xl: 32px;
 
   --shadow-sm: 0 4px 18px rgba(26, 31, 54, 0.08);
-  --shadow-md: 0 16px 52px rgba(26, 31, 54, 0.13);
+  --shadow-md: 0 16px 52px rgba(26, 31, 54, 0.55);
   --shadow-lg: 0 32px 80px rgba(26, 31, 54, 0.18);
 
   /* Motion */
@@ -87,7 +88,7 @@
   --dash-surface-3: rgba(255, 255, 255, 0.60);
   --dash-surface-4: rgba(255, 255, 255, 0.55);
   --dash-border-strong: rgba(255, 255, 255, 0.80);
-  --dash-border-soft: rgba(20, 106, 75, 0.09);
+  --dash-border-soft: rgba(20, 106, 75, 0.3);
   --dash-shadow-soft: 0 8px 32px rgba(10, 40, 28, 0.10);
   --dash-shadow-md: 0 12px 32px rgba(10, 40, 28, 0.12);
 
@@ -105,6 +106,7 @@
   --color-text: #f7f9ff;
   --color-muted: rgba(232, 236, 249, 0.76);
   --color-subtle: rgba(232, 236, 249, 0.56);
+  --color-optional: rgba(230, 66, 6, 0.962);
 
   /* Navy re-mapped to light values so every var(--color-navy) stays readable */
   --color-navy: #c8d4f0;
