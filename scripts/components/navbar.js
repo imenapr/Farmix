@@ -367,6 +367,7 @@ export function mountNavbar(targetEl) {
           const id = item.dataset.notifId;
           const found = items.find((n) => String(n.id) === id);
           const isMessage = found?.type === "message";
+          const isOrder = found?.type === "order";
           const markRead = () => {
             markNotificationRead(id, userId);
             item.classList.remove("unread");
@@ -379,6 +380,8 @@ export function mountNavbar(targetEl) {
               if (fromUserId) qp.set("user", fromUserId);
               if (listingId) qp.set("listing", listingId);
               location.href = `/pages/messages.html${qp.toString() ? `?${qp}` : ""}`;
+            } else if (isOrder) {
+              location.href = "/pages/farmer-dashboard.html";
             }
           };
           item.addEventListener("click", markRead);
