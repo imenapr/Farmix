@@ -2,6 +2,7 @@ import { boot } from "../app/boot.js";
 import { completePasswordReset, waitForRecoverySession } from "../app/auth-state.js";
 import { toast, qs, setText } from "../app/ui.js";
 import { initLanguageFromUrl, getCurrentLang, t, onLanguageChange } from "../app/i18n.js";
+import { wirePasswordRuleFeedback } from "../data/validators.js";
 
 initLanguageFromUrl();
 boot();
@@ -50,7 +51,7 @@ function mountForm() {
             <label class="form-label" for="rp-password">${t("auth.reset.newPassword")}</label>
             <input class="input" id="rp-password" name="password" type="password"
                    autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
-            <span class="form-error" data-err="password"></span>
+            <span class="form-error form-error-multiline" data-err="password"></span>
           </div>
 
           <div class="form-field">
@@ -70,6 +71,7 @@ function mountForm() {
   const submitBtn = qs(root, "[data-submit]");
   const banner = qs(root, "#err-banner");
   const fieldKeys = ["password", "confirmPassword"];
+  wirePasswordRuleFeedback(form.elements.namedItem("password"), root.querySelector("[data-err='password']"));
 
   function clearErrors() {
     setText(banner, "");

@@ -2,6 +2,7 @@ import { boot } from "../app/boot.js";
 import { signup } from "../app/auth-state.js";
 import { toast, qs, setText } from "../app/ui.js";
 import { t, onLanguageChange } from "../app/i18n.js";
+import { wirePasswordRuleFeedback } from "../data/validators.js";
 
 boot();
 
@@ -162,7 +163,7 @@ function mountSignup() {
           <label class="form-label" for="sf-password">${t("auth.password")}</label>
           <input class="input" id="sf-password" name="password"
                  type="password" autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
-          <span class="form-error" data-err="password"></span>
+          <span class="form-error form-error-multiline" data-err="password"></span>
         </div>
 
         <button class="btn btn-primary btn-full" type="submit" data-submit>
@@ -190,6 +191,9 @@ function mountSignup() {
   const compWrap = qs(root, "[data-cond='companyName']");
   const farmInput = form.elements.namedItem("farmName");
   const compInput = form.elements.namedItem("companyName");
+  const passwordInput = form.elements.namedItem("password");
+  const passwordError = root.querySelector("[data-err='password']");
+  wirePasswordRuleFeedback(passwordInput, passwordError);
 
 // ─── Role picker ─────────────────────────────────────────────────
   const roleCards = root.querySelectorAll(".role-card[data-role]");

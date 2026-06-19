@@ -34,9 +34,55 @@ export function validateOptionalEmail(email) {
   return validateEmail(value);
 }
 
+const PASSWORD_RULES = [
+  {
+    test: (value) => value.length >= 6,
+    messageKey: "validation.passwordMin",
+    defaultMessage: "Password must be at least 6 characters.",
+  },
+  {
+    test: (value) => /\d/.test(value),
+    messageKey: "validation.passwordNumber",
+    defaultMessage: "Password must contain at least 1 number.",
+  },
+  {
+    test: (value) => /^[A-Za-z0-9]+$/.test(value),
+    messageKey: "validation.passwordEnglish",
+    defaultMessage: "Password must use English letters and numbers only.",
+  },
+];
+
+/** @returns {string[]} Human-readable messages for each failed password rule. */
+export function getPasswordRuleErrors(password) {
+  const value = String(password ?? "");
+  if (!value) {
+    return [t("validation.passwordRequired", { default: "Enter your password." })];
+  }
+  return PASSWORD_RULES.filter((rule) => !rule.test(value)).map((rule) =>
+    t(rule.messageKey, { default: rule.defaultMessage }),
+  );
+}
+
+export function wirePasswordRuleFeedback(input, errorEl) {
+  if (!input || !errorEl) return;
+
+  const update = () => {
+    const value = String(input.value ?? "");
+    if (!value) {
+      errorEl.textContent = "";
+      return;
+    }
+    errorEl.textContent = getPasswordRuleErrors(value).join("\n");
+  };
+
+  input.addEventListener("input", update);
+  input.addEventListener("blur", update);
+}
+
 export function validatePassword(password) {
   const value = String(password ?? "");
-  if (value.length < 8) return fail({ password: t("validation.passwordMin", { default: "Password must be at least 8 characters." }) });
+  const messages = getPasswordRuleErrors(value);
+  if (messages.length) return fail({ password: messages.join("\n") });
   return ok(value);
 }
 

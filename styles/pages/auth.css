@@ -148,6 +148,11 @@
   min-height: 1em;
 }
 
+.form-error-multiline {
+  white-space: pre-line;
+  line-height: 1.45;
+}
+
 .form-error:empty {
   display: none;
 }
