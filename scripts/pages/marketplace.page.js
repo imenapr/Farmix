@@ -9,6 +9,13 @@ import { renderListingCard } from "../components/listing-card.js";
 import { placeOrder } from "../services/orders.service.js";
 import { openGuestGate } from "../components/guest-gate.js";
 import { t, onLanguageChange, translatePageHead, getCategoryLabel } from "../app/i18n.js";
+import {
+  CURRENCIES,
+  formatPrice,
+  getCurrencySymbol,
+  getDisplayCurrency,
+  setDisplayCurrency,
+} from "../lib/currency.js";
 
 boot();
 translatePageHead("marketplace.pageTitle", "marketplace.pageSubtitle");
@@ -36,6 +43,9 @@ const saveBtn = document.getElementById("save-categories");
 const cancelBtn = document.getElementById("cancel-modal");
 
 const orderModal = document.getElementById("order-modal");
+const currencyToggle = qs(root, "[data-currency-toggle]");
+
+let displayCurrency = getDisplayCurrency();
 
 const CATEGORIES = getCategories();
 for (const c of CATEGORIES) {
@@ -168,6 +178,37 @@ function mountOrderDelegation() {
 
 mountOrderDelegation();
 
+function updateCurrencyToggleUI() {
+  if (!currencyToggle) return;
+  currencyToggle.querySelectorAll("[data-currency]").forEach((btn) => {
+    const code = btn.dataset.currency === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.GEL;
+    const active = code === displayCurrency;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+    btn.textContent = getCurrencySymbol(code);
+    btn.setAttribute("aria-label", code === CURRENCIES.USD ? t("currency.usd") : t("currency.gel"));
+  });
+  currencyToggle.setAttribute("aria-label", t("currency.label"));
+}
+
+function wireCurrencyToggle() {
+  if (!currencyToggle) return;
+  updateCurrencyToggleUI();
+  currencyToggle.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-currency]");
+    if (!btn) return;
+    const next = btn.dataset.currency === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.GEL;
+    if (next === displayCurrency) return;
+    displayCurrency = next;
+    setDisplayCurrency(displayCurrency);
+    updateCurrencyToggleUI();
+    if (cachedResults) renderResultsBlock(cachedResults);
+    if (!orderModal.hidden) updateOrderTotal();
+  });
+}
+
+wireCurrencyToggle();
+
 function renderResultsBlock({ items, total, page, pageSize, filters }) {
   cachedResults = { items, total, page, pageSize, filters };
   for (const listing of items) listingsById.set(listing.id, listing);
@@ -186,7 +227,7 @@ function renderResultsBlock({ items, total, page, pageSize, filters }) {
     return;
   }
 
-  resultsEl.innerHTML = `<div class="grid cols-3">${items.map((l) => renderListingCard(l)).join("")}</div>`;
+  resultsEl.innerHTML = `<div class="grid cols-3">${items.map((l) => renderListingCard(l, { currency: displayCurrency })).join("")}</div>`;
   injectOrderButtons(items);
   renderPager({
     page,
@@ -413,7 +454,7 @@ function closeOrderModal() {
 
 function updateOrderTotal() {
   const qty = Math.max(1, Math.min(omMaxQty, parseInt(document.getElementById("om-qty").value, 10) || 1));
-  document.getElementById("om-total").textContent = `$${(qty * omPricePerUnit).toFixed(2)}`;
+  document.getElementById("om-total").textContent = formatPrice(qty * omPricePerUnit, displayCurrency);
 }
 
 function openOrderModal(listing, triggerEl = null) {
@@ -423,7 +464,7 @@ function openOrderModal(listing, triggerEl = null) {
   omMaxQty = listing.quantityAvailable;
   omUnit = listing.unit;
   document.getElementById("om-title").textContent = listing.title;
-  document.getElementById("om-meta").textContent = `$${Number(listing.price).toFixed(2)} / ${listing.unit}`;
+  document.getElementById("om-meta").textContent = `${formatPrice(listing.price, displayCurrency)} / ${listing.unit}`;
   document.getElementById("om-avail").textContent = `${listing.quantityAvailable} ${listing.unit}`;
   const qtyInput = document.getElementById("om-qty");
   qtyInput.max = listing.quantityAvailable;
@@ -551,6 +592,7 @@ onLanguageChange(() => {
   translatePageHead("marketplace.pageTitle", "marketplace.pageSubtitle");
   translateFilterLabels();
   translateOrderModal();
+  updateCurrencyToggleUI();
   const isOpen = filtersPanel?.classList.contains("is-open");
   if (filtersToggleLabel) {
     filtersToggleLabel.textContent = isOpen ? t("marketplace.hideFilters") : t("marketplace.showFilters");

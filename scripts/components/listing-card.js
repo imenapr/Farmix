@@ -1,6 +1,7 @@
 import { escapeHtml, productListingUrl } from "../app/ui.js";
 import { getCategoryById } from "../data/categories.js";
 import { t, getCategoryLabel } from "../app/i18n.js";
+import { CURRENCIES, formatPrice } from "../lib/currency.js";
 
 // Curated photography for seeded products — matched by title keyword at render time
 // so already-seeded localStorage data picks up the real images without a reseed.
@@ -43,9 +44,12 @@ const PIN_SVG = `<svg width="11" height="13" viewBox="0 0 24 28" fill="currentCo
   <path d="M12 0C7.58 0 4 3.58 4 8c0 6 8 16 8 16s8-10 8-16c0-4.42-3.58-8-8-8zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/>
 </svg>`;
 
-export function renderListingCard(listing, { compact = false, maskLocation = false } = {}) {
-  const img   = resolveImage(listing);
-  const price = Number(listing.price).toFixed(2).replace(/\.00$/, "");
+export function renderListingCard(
+  listing,
+  { compact = false, maskLocation = false, currency = CURRENCIES.GEL } = {},
+) {
+  const img = resolveImage(listing);
+  const price = formatPrice(listing.price, currency);
   const qty   = Number.isFinite(listing.quantityAvailable) ? listing.quantityAvailable : 0;
 
   const delivery = avg(listing.ratings?.delivery);
@@ -97,7 +101,7 @@ export function renderListingCard(listing, { compact = false, maskLocation = fal
 
         <div class="listing-footer-row">
           <div class="listing-price-group">
-            <span class="listing-price-main">$${escapeHtml(price)}</span>
+            <span class="listing-price-main">${escapeHtml(price)}</span>
             <span class="listing-price-unit">/ ${escapeHtml(listing.unit ?? "unit")}</span>
           </div>
           <div class="listing-rating">

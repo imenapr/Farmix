@@ -1600,3 +1600,86 @@
     min-height: 420px;
   }
 }
+
+/* Price + unit row (add/edit listing) */
+.listing-price-unit-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.unit-currency-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.unit-currency-row > .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.currency-selector {
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg-card);
+  overflow: hidden;
+  box-shadow: var(--glass-inner-top);
+}
+
+.currency-option {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.currency-option input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.currency-option span:not(.sr-only) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  padding: 0.55rem 0.75rem;
+  font-size: var(--text-md);
+  font-weight: 800;
+  color: var(--color-muted);
+  transition:
+    background var(--dur-2) var(--ease-out),
+    color var(--dur-2) var(--ease-out);
+}
+
+.currency-option input:checked + span:not(.sr-only) {
+  background: linear-gradient(145deg, var(--color-lime), var(--color-lime-hover));
+  color: #fff;
+}
+
+.currency-option input:focus-visible + span:not(.sr-only) {
+  outline: 2px solid var(--color-lime);
+  outline-offset: -2px;
+}
+
+@media (max-width: 720px) {
+  .listing-price-unit-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .unit-currency-row {
+    flex-direction: column;
+  }
+
+  .currency-selector {
+    align-self: flex-start;
+  }
+}

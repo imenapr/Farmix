@@ -2,6 +2,7 @@
 export const CATEGORIES = [
   { id: "vegetables", name: "Vegetables" },
   { id: "fruits", name: "Fruits" },
+  { id: "plants", name: "Plants" },
   { id: "dairy", name: "Dairy" },
   { id: "meat", name: "Meat" },
   { id: "honey", name: "Honey" },

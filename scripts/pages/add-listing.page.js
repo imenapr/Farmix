@@ -5,6 +5,7 @@ import { ROLES } from "../app/config.js";
 import { createListing } from "../services/listings.service.js";
 import { t, onLanguageChange, translatePageHead, getCategoryLabel } from "../app/i18n.js";
 import { getCategories } from "../data/categories.js";
+import { CURRENCIES, getCurrencySymbol, priceToStorageGEL } from "../lib/currency.js";
 
 boot();
 translatePageHead("listingForm.addPageTitle", "listingForm.addPageSubtitle");
@@ -103,7 +104,7 @@ function mountPage() {
             <span class="form-error" data-err="categoryId"></span>
           </div>
 
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+          <div class="listing-price-unit-row">
             <div class="form-field">
               <label class="form-label" for="price">${t("common.price")}</label>
               <input class="input" id="price" name="price" type="number" inputmode="decimal" placeholder="0.00" step="0.01" min="0" required />
@@ -111,10 +112,24 @@ function mountPage() {
             </div>
             <div class="form-field">
               <label class="form-label" for="unit">${t("common.unit")}</label>
-              <select class="input" id="unit" name="unit" required>
-                <option value="">${t("listingForm.selectUnit")}</option>
-                ${unitOptions()}
-              </select>
+              <div class="unit-currency-row">
+                <select class="input" id="unit" name="unit" required>
+                  <option value="">${t("listingForm.selectUnit")}</option>
+                  ${unitOptions()}
+                </select>
+                <div class="currency-selector" role="radiogroup" aria-label="${t("currency.label")}">
+                  <label class="currency-option">
+                    <input type="radio" name="priceCurrency" value="GEL" checked />
+                    <span aria-hidden="true">${getCurrencySymbol(CURRENCIES.GEL)}</span>
+                    <span class="sr-only">${t("currency.gel")}</span>
+                  </label>
+                  <label class="currency-option">
+                    <input type="radio" name="priceCurrency" value="USD" />
+                    <span aria-hidden="true">${getCurrencySymbol(CURRENCIES.USD)}</span>
+                    <span class="sr-only">${t("currency.usd")}</span>
+                  </label>
+                </div>
+              </div>
               <span class="form-error" data-err="unit"></span>
             </div>
           </div>
@@ -291,11 +306,14 @@ function wireForm(form) {
 
       if (images.length === 0) images = ["/img/logo.png"];
 
+      const inputCurrency = fd.get("priceCurrency") === CURRENCIES.USD ? CURRENCIES.USD : CURRENCIES.GEL;
+      const priceGel = priceToStorageGEL(fd.get("price"), inputCurrency);
+
       const res = await createListing(
         {
           title: fd.get("title"),
           categoryId: fd.get("categoryId"),
-          price: fd.get("price"),
+          price: priceGel,
           unit: fd.get("unit"),
           quantityAvailable: fd.get("quantityAvailable"),
           location: fd.get("location"),

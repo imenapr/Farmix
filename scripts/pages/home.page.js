@@ -1,14 +1,44 @@
 import { boot } from "../app/boot.js";
-import { renderSkeletonCards, renderStateBlock, mountListingCardLinks } from "../app/ui.js";
+import { renderSkeletonCards, renderStateBlock, mountListingCardLinks, escapeHtml } from "../app/ui.js";
 import { renderListingCard } from "../components/listing-card.js";
 import { getTrendingListings } from "../app/state.js";
 import { getCurrentUser } from "../app/auth-state.js";
+import { ROLES } from "../app/config.js";
+import { on } from "../app/events.js";
 import { t, onLanguageChange } from "../app/i18n.js";
 
 boot();
 
 const mount = document.getElementById("home-latest");
 let latestItems = null;
+
+function renderHeroActions() {
+  const actions = document.querySelector(".hero-actions");
+  if (!actions) return;
+
+  const user = getCurrentUser();
+  const canSell = user && (user.role === ROLES.farmer || user.role === ROLES.admin);
+  const browse = `<a class="btn btn-primary" href="/pages/marketplace.html">${t("common.browseMarketplace")}</a>`;
+
+  if (!user) {
+    actions.innerHTML = `
+      ${browse}
+      <a class="btn btn-ghost" href="/pages/signup.html">${t("auth.signup.button")}</a>
+      <a class="btn btn-ghost" href="/pages/for-farmers.html" data-guest-gate data-guest-gate-title="${escapeHtml(t("home.guestGateTitle"))}">${t("home.sellAsFarmer")}</a>
+    `;
+    return;
+  }
+
+  if (canSell) {
+    actions.innerHTML = `
+      ${browse}
+      <a class="btn btn-ghost" href="/pages/add-listing.html">${t("home.addNewListing")}</a>
+    `;
+    return;
+  }
+
+  actions.innerHTML = browse;
+}
 
 function renderHero() {
   const eyebrow = document.querySelector(".hero-eyebrow");
@@ -24,16 +54,7 @@ function renderHero() {
   const sub = document.querySelector(".hero-sub");
   if (sub) sub.textContent = t("home.subtitle");
 
-  const actions = document.querySelector(".hero-actions");
-  if (actions) {
-    const links = actions.querySelectorAll("a");
-    if (links[0]) links[0].textContent = t("common.browseMarketplace");
-    if (links[1]) links[1].textContent = t("auth.signup.button");
-    if (links[2]) {
-      links[2].textContent = t("home.sellAsFarmer");
-      links[2].setAttribute("data-guest-gate-title", t("home.guestGateTitle"));
-    }
-  }
+  renderHeroActions();
 
   const statLabels = document.querySelectorAll(".hero-stat-label");
   if (statLabels[0]) statLabels[0].textContent = t("home.localFarms");
@@ -92,6 +113,10 @@ function loadLatest() {
 
 renderHero();
 loadLatest();
+on("auth:changed", () => {
+  renderHeroActions();
+  renderLatest();
+});
 onLanguageChange(() => {
   renderHero();
   renderLatest();

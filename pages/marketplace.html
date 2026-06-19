@@ -94,7 +94,13 @@
             <section class="market-results">
               <div class="market-topbar">
                 <div class="market-count" data-count></div>
-                <div class="market-count" data-page></div>
+                <div class="market-topbar-end">
+                  <div class="currency-toggle" data-currency-toggle role="group" aria-label="Currency">
+                    <button type="button" class="currency-toggle-btn is-active" data-currency="GEL" aria-pressed="true" aria-label="GEL">₾</button>
+                    <button type="button" class="currency-toggle-btn" data-currency="USD" aria-pressed="false" aria-label="USD">$</button>
+                  </div>
+                  <div class="market-count" data-page></div>
+                </div>
               </div>
               <div data-results aria-live="polite"></div>
               <div class="pager" data-pager></div>
@@ -133,7 +139,7 @@
           </div>
         </div>
         <div class="order-modal-total-label">Total</div>
-        <div class="order-modal-total-val" id="om-total">$0.00</div>
+        <div class="order-modal-total-val" id="om-total">₾0</div>
         <div class="order-modal-actions">
           <button class="btn btn-ghost" id="om-cancel" type="button">Cancel</button>
           <button class="btn btn-primary" id="om-confirm" type="button">Confirm Order</button>
