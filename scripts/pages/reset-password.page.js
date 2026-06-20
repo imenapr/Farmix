@@ -2,7 +2,7 @@ import { boot } from "../app/boot.js";
 import { completePasswordReset, waitForRecoverySession } from "../app/auth-state.js";
 import { toast, qs, setText } from "../app/ui.js";
 import { initLanguageFromUrl, getCurrentLang, t, onLanguageChange } from "../app/i18n.js";
-import { wirePasswordRuleFeedback } from "../data/validators.js";
+import { wirePasswordRuleFeedback, wirePasswordConfirmFeedback } from "../data/validators.js";
 
 initLanguageFromUrl();
 boot();
@@ -72,6 +72,11 @@ function mountForm() {
   const banner = qs(root, "#err-banner");
   const fieldKeys = ["password", "confirmPassword"];
   wirePasswordRuleFeedback(form.elements.namedItem("password"), root.querySelector("[data-err='password']"));
+  wirePasswordConfirmFeedback(
+    form.elements.namedItem("password"),
+    form.elements.namedItem("confirmPassword"),
+    root.querySelector("[data-err='confirmPassword']"),
+  );
 
   function clearErrors() {
     setText(banner, "");

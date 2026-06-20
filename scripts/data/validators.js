@@ -46,9 +46,9 @@ const PASSWORD_RULES = [
     defaultMessage: "Password must contain at least 1 number.",
   },
   {
-    test: (value) => /^[A-Za-z0-9]+$/.test(value),
+    test: (value) => /^[\x20-\x7E]+$/.test(value),
     messageKey: "validation.passwordEnglish",
-    defaultMessage: "Password must use English letters and numbers only.",
+    defaultMessage: "Password must use English characters only.",
   },
 ];
 
@@ -77,6 +77,25 @@ export function wirePasswordRuleFeedback(input, errorEl) {
 
   input.addEventListener("input", update);
   input.addEventListener("blur", update);
+}
+
+export function wirePasswordConfirmFeedback(passwordInput, confirmInput, confirmErrorEl) {
+  if (!passwordInput || !confirmInput || !confirmErrorEl) return;
+
+  const update = () => {
+    const confirm = String(confirmInput.value ?? "");
+    if (!confirm) {
+      confirmErrorEl.textContent = "";
+      return;
+    }
+    const pass = String(passwordInput.value ?? "");
+    confirmErrorEl.textContent =
+      pass === confirm ? "" : t("validation.passwordMismatch", { default: "Passwords do not match." });
+  };
+
+  passwordInput.addEventListener("input", update);
+  confirmInput.addEventListener("input", update);
+  confirmInput.addEventListener("blur", update);
 }
 
 export function validatePassword(password) {
@@ -126,6 +145,17 @@ export function validateSignup(input) {
 
   const passR = validatePassword(input?.password);
   if (!passR.ok) Object.assign(fieldErrors, passR.fieldErrors);
+
+  const confirm = String(input?.confirmPassword ?? "");
+  if (!confirm) {
+    fieldErrors.confirmPassword = t("validation.signupConfirmPasswordRequired", {
+      default: "Confirm your password.",
+    });
+  } else if (passR.ok && confirm !== passR.value) {
+    fieldErrors.confirmPassword = t("validation.passwordMismatch", {
+      default: "Passwords do not match.",
+    });
+  }
 
   const roleR = validateRole(input?.role);
   if (!roleR.ok) Object.assign(fieldErrors, roleR.fieldErrors);

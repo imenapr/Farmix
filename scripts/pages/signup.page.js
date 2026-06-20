@@ -2,7 +2,7 @@ import { boot } from "../app/boot.js";
 import { signup } from "../app/auth-state.js";
 import { toast, qs, setText } from "../app/ui.js";
 import { t, onLanguageChange } from "../app/i18n.js";
-import { wirePasswordRuleFeedback } from "../data/validators.js";
+import { wirePasswordRuleFeedback, wirePasswordConfirmFeedback } from "../data/validators.js";
 
 boot();
 
@@ -158,6 +158,13 @@ function mountSignup() {
           <span class="form-error form-error-multiline" data-err="password"></span>
         </div>
 
+        <div class="form-field">
+          <label class="form-label" for="sf-confirm-password">${t("auth.reset.confirmPassword")}</label>
+          <input class="input" id="sf-confirm-password" name="confirmPassword"
+                 type="password" autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
+          <span class="form-error" data-err="confirmPassword"></span>
+        </div>
+
         <!-- ── Email ── -->
         <div class="form-field">
           ${optionalFieldLabel("sf-email", "auth.signup.email")}
@@ -192,8 +199,11 @@ function mountSignup() {
   const farmInput = form.elements.namedItem("farmName");
   const compInput = form.elements.namedItem("companyName");
   const passwordInput = form.elements.namedItem("password");
+  const confirmPasswordInput = form.elements.namedItem("confirmPassword");
   const passwordError = root.querySelector("[data-err='password']");
+  const confirmPasswordError = root.querySelector("[data-err='confirmPassword']");
   wirePasswordRuleFeedback(passwordInput, passwordError);
+  wirePasswordConfirmFeedback(passwordInput, confirmPasswordInput, confirmPasswordError);
 
 // ─── Role picker ─────────────────────────────────────────────────
   const roleCards = root.querySelectorAll(".role-card[data-role]");
@@ -221,7 +231,7 @@ function mountSignup() {
   if (next) loginLink.href = `/pages/login.html?next=${encodeURIComponent(next)}`;
 
 // ─── Error helpers ────────────────────────────────────────────────
-  const FIELD_KEYS = ["name", "farmName", "companyName", "location", "phone", "email", "password", "role", "form"];
+  const FIELD_KEYS = ["name", "farmName", "companyName", "location", "phone", "email", "password", "confirmPassword", "role", "form"];
 
   function clearErrors() {
   setText(banner, "");
@@ -251,6 +261,7 @@ function mountSignup() {
       phone: fd.get("phone"),
       email: fd.get("email"),
       password: fd.get("password"),
+      confirmPassword: fd.get("confirmPassword"),
       role: fd.get("role"),
     });
 
