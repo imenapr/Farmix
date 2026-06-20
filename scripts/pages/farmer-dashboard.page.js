@@ -1,9 +1,10 @@
 import { boot } from "../app/boot.js";
 import { ROLES } from "../app/config.js";
 import { guardRole } from "../app/router-guards.js";
-import { escapeHtml, renderStateBlock, productListingUrl, mountListingCardLinks } from "../app/ui.js";
+import { escapeHtml, renderStateBlock, productListingUrl, mountListingCardLinks, toast } from "../app/ui.js";
 import { getUserListings } from "../services/listings.service.js";
 import { listInquiriesForSeller } from "../services/messages.service.js";
+import { listOrdersForSeller, updateOrderStatus } from "../services/orders.service.js";
 import { renderListingCard } from "../components/listing-card.js";
 import { t, onLanguageChange } from "../app/i18n.js";
 
@@ -19,6 +20,7 @@ function getSections() {
   return {
     overview: { title: t("farmer.overview"), sub: t("farmer.overviewSub") },
     listings: { title: t("farmer.myListings"), sub: t("nav.link.marketplace") },
+    orders: { title: t("farmer.orders"), sub: t("farmer.ordersSub") },
     messages: { title: t("farmer.messages"), sub: t("messages.conversations") },
     profile: { title: t("farmer.profile"), sub: t("account.signedInAs") },
   };
@@ -27,6 +29,7 @@ function getSections() {
 let user = null;
 let listings = [];
 let messages = [];
+let orders = [];
 let activeSection = "overview";
 
 function translateStaticLabels() {
@@ -39,6 +42,7 @@ function translateStaticLabels() {
     const section = btn.dataset.section;
     if (section === "overview") btn.innerHTML = `<span class="fd-nav-icon">◈</span> ${t("farmer.overview")}`;
     if (section === "listings") btn.innerHTML = `<span class="fd-nav-icon">📦</span> ${t("farmer.myListings")}`;
+    if (section === "orders") btn.innerHTML = `<span class="fd-nav-icon">🛒</span> ${t("farmer.orders")}`;
     if (section === "messages") btn.innerHTML = `<span class="fd-nav-icon">✉</span> ${t("farmer.messages")}`;
     if (section === "profile") btn.innerHTML = `<span class="fd-nav-icon">👤</span> ${t("farmer.profile")}`;
   });
@@ -67,11 +71,35 @@ function messageSenderLabel(m) {
   return t("common.buyer");
 }
 
+function orderStatusLabel(status) {
+  return t(`orders.status.${status}`, { default: status });
+}
+
+function buyerLabel(order) {
+  if (order.buyerName) return order.buyerName;
+  if (order.buyerEmail) return order.buyerEmail;
+  return t("common.buyer");
+}
+
+function renderOrderStatusSelect(order) {
+  const statuses = ["pending", "accepted", "shipped", "delivered", "cancelled"];
+  return `
+    <select class="fd-order-status-select" data-order-id="${escapeHtml(order.id)}" aria-label="${escapeHtml(t("farmer.updateStatus"))}">
+      ${statuses
+        .map(
+          (status) =>
+            `<option value="${status}"${order.status === status ? " selected" : ""}>${escapeHtml(orderStatusLabel(status))}</option>`,
+        )
+        .join("")}
+    </select>`;
+}
+
 function renderOverview() {
   const totalViews = listings.reduce((sum, l) => sum + Number(l.views ?? 0), 0);
   const totalInquiries = messages.length;
   const recentListings = listings.slice(0, 5);
   const recentMessages = messages.slice(0, 5);
+  const recentOrders = orders.slice(0, 5);
 
   return `
     <section class="fd-section active" id="fd-section-overview">
@@ -87,6 +115,10 @@ function renderOverview() {
         <article class="fd-stat-card">
           <div class="fd-stat-value">${totalInquiries}</div>
           <div class="fd-stat-label">${t("farmer.totalInquiries")}</div>
+        </article>
+        <article class="fd-stat-card">
+          <div class="fd-stat-value">${orders.length}</div>
+          <div class="fd-stat-label">${t("farmer.totalOrders")}</div>
         </article>
       </div>
 
@@ -147,6 +179,39 @@ function renderOverview() {
         </div>`
           : `<div class="fd-empty">${t("farmer.noInquiriesYet")}</div>`
       }
+
+      <div class="fd-section-head">
+        <h2 class="fd-section-title">${t("farmer.recentOrders")}</h2>
+        <span class="fd-section-spacer"></span>
+        <button class="btn btn-ghost btn-sm fd-go-orders" type="button">${t("farmer.viewAllOrders")}</button>
+      </div>
+      ${
+        recentOrders.length
+          ? `
+        <div class="fd-table-wrap">
+          <table class="fd-table">
+            <thead>
+              <tr><th>${t("common.listing")}</th><th>${t("farmer.orderBuyer")}</th><th>${t("common.quantity")}</th><th>${t("common.total")}</th><th>${t("common.status")}</th><th>${t("common.received")}</th></tr>
+            </thead>
+            <tbody>
+              ${recentOrders
+                .map(
+                  (o) => `
+                <tr>
+                  <td><a class="fd-row-link" href="${escapeHtml(productListingUrl(o.listingId))}">${escapeHtml(o.listingTitle ?? t("common.listing"))}</a></td>
+                  <td>${escapeHtml(buyerLabel(o))}</td>
+                  <td>${Number(o.quantity ?? 0)} ${escapeHtml(o.unit ?? "")}</td>
+                  <td>$${Number(o.totalPrice ?? 0).toFixed(2)}</td>
+                  <td><span class="fd-order-status fd-order-status--${escapeHtml(o.status)}">${escapeHtml(orderStatusLabel(o.status))}</span></td>
+                  <td>${escapeHtml(formatDate(o.createdAt))}</td>
+                </tr>`,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>`
+          : `<div class="fd-empty">${t("farmer.noOrdersYet")}</div>`
+      }
     </section>
   `;
 }
@@ -162,6 +227,44 @@ function renderListingsSection() {
         listings.length
           ? `<div class="grid cols-3">${listings.map((l) => renderListingCard(l, { compact: true })).join("")}</div>`
           : `<div class="fd-empty">${t("farmer.noListingsFound")}</div>`
+      }
+    </section>
+  `;
+}
+
+function renderOrdersSection() {
+  return `
+    <section class="fd-section" id="fd-section-orders">
+      <div class="fd-section-head">
+        <h2 class="fd-section-title">${t("farmer.orders")}</h2>
+        <span class="fd-section-count">${orders.length}</span>
+      </div>
+      ${
+        orders.length
+          ? `
+        <div class="fd-table-wrap">
+          <table class="fd-table">
+            <thead>
+              <tr><th>${t("common.listing")}</th><th>${t("farmer.orderBuyer")}</th><th>${t("common.quantity")}</th><th>${t("common.total")}</th><th>${t("common.status")}</th><th>${t("common.received")}</th></tr>
+            </thead>
+            <tbody>
+              ${orders
+                .map(
+                  (o) => `
+                <tr>
+                  <td><a class="fd-row-link" href="${escapeHtml(productListingUrl(o.listingId))}">${escapeHtml(o.listingTitle ?? t("common.listing"))}</a></td>
+                  <td>${escapeHtml(buyerLabel(o))}</td>
+                  <td>${Number(o.quantity ?? 0)} ${escapeHtml(o.unit ?? "")}</td>
+                  <td>$${Number(o.totalPrice ?? 0).toFixed(2)}</td>
+                  <td>${renderOrderStatusSelect(o)}</td>
+                  <td>${escapeHtml(formatDate(o.createdAt))}</td>
+                </tr>`,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>`
+          : `<div class="fd-empty">${t("farmer.noOrdersYet")}</div>`
       }
     </section>
   `;
@@ -228,11 +331,38 @@ function renderDashboard() {
   root.innerHTML = `
     ${renderOverview()}
     ${renderListingsSection()}
+    ${renderOrdersSection()}
     ${renderMessagesSection()}
     ${renderProfileSection()}
   `;
 
   mountListingCardLinks(root.querySelector("#fd-section-listings .grid"));
+
+  root.querySelector(".fd-go-orders")?.addEventListener("click", () => showSection("orders"));
+
+  root.querySelectorAll(".fd-order-status-select").forEach((select) => {
+    select.addEventListener("change", async () => {
+      const orderId = select.dataset.orderId;
+      const status = select.value;
+      const previous = orders.find((o) => o.id === orderId)?.status;
+      select.disabled = true;
+
+      const result = await updateOrderStatus(orderId, status);
+      select.disabled = false;
+
+      if (!result.ok) {
+        if (previous) select.value = previous;
+        toast("error", result.error?.message ?? t("farmer.statusUpdateFailed"));
+        return;
+      }
+
+      const idx = orders.findIndex((o) => o.id === orderId);
+      if (idx >= 0) orders[idx] = { ...orders[idx], ...result.data, status };
+      toast("success", t("farmer.statusUpdated"));
+      renderDashboard();
+      showSection("orders");
+    });
+  });
 
   document.querySelectorAll(".fd-nav-item").forEach((btn) => {
     btn.addEventListener("click", () => showSection(btn.dataset.section));
@@ -241,9 +371,14 @@ function renderDashboard() {
 }
 
 async function loadData() {
-  const [listingsRes, messagesRes] = await Promise.all([getUserListings(user.id), listInquiriesForSeller(user.id)]);
+  const [listingsRes, messagesRes, ordersRes] = await Promise.all([
+    getUserListings(user.id),
+    listInquiriesForSeller(user.id),
+    listOrdersForSeller(user.id),
+  ]);
   listings = listingsRes.ok ? listingsRes.data : [];
   messages = messagesRes.ok ? messagesRes.data : [];
+  orders = ordersRes.ok ? ordersRes.data : [];
 }
 
 async function init() {
