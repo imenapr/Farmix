@@ -3,6 +3,7 @@ import { signup } from "../app/auth-state.js";
 import { toast, qs, setText } from "../app/ui.js";
 import { t, onLanguageChange } from "../app/i18n.js";
 import { wirePasswordRuleFeedback, wirePasswordConfirmFeedback } from "../data/validators.js";
+import { mountPasswordToggles, renderPasswordToggleButton } from "../components/password-toggle.js";
 
 boot();
 
@@ -153,15 +154,21 @@ function mountSignup() {
         <!-- ── Password ── -->
         <div class="form-field">
           <label class="form-label" for="sf-password">${t("auth.password")}</label>
-          <input class="input" id="sf-password" name="password"
-                 type="password" autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
+          <div class="password-input-wrap">
+            <input class="input password-input" id="sf-password" name="password"
+                   type="password" autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
+            ${renderPasswordToggleButton()}
+          </div>
           <span class="form-error form-error-multiline" data-err="password"></span>
         </div>
 
         <div class="form-field">
           <label class="form-label" for="sf-confirm-password">${t("auth.reset.confirmPassword")}</label>
-          <input class="input" id="sf-confirm-password" name="confirmPassword"
-                 type="password" autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
+          <div class="password-input-wrap">
+            <input class="input password-input" id="sf-confirm-password" name="confirmPassword"
+                   type="password" autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
+            ${renderPasswordToggleButton()}
+          </div>
           <span class="form-error" data-err="confirmPassword"></span>
         </div>
 
@@ -204,6 +211,7 @@ function mountSignup() {
   const confirmPasswordError = root.querySelector("[data-err='confirmPassword']");
   wirePasswordRuleFeedback(passwordInput, passwordError);
   wirePasswordConfirmFeedback(passwordInput, confirmPasswordInput, confirmPasswordError);
+  mountPasswordToggles(root);
 
 // ─── Role picker ─────────────────────────────────────────────────
   const roleCards = root.querySelectorAll(".role-card[data-role]");

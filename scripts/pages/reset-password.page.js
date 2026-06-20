@@ -3,6 +3,7 @@ import { completePasswordReset, waitForRecoverySession } from "../app/auth-state
 import { toast, qs, setText } from "../app/ui.js";
 import { initLanguageFromUrl, getCurrentLang, t, onLanguageChange } from "../app/i18n.js";
 import { wirePasswordRuleFeedback, wirePasswordConfirmFeedback } from "../data/validators.js";
+import { mountPasswordToggles, renderPasswordToggleButton } from "../components/password-toggle.js";
 
 initLanguageFromUrl();
 boot();
@@ -49,15 +50,21 @@ function mountForm() {
         <form id="reset-form" novalidate>
           <div class="form-field">
             <label class="form-label" for="rp-password">${t("auth.reset.newPassword")}</label>
-            <input class="input" id="rp-password" name="password" type="password"
-                   autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
+            <div class="password-input-wrap">
+              <input class="input password-input" id="rp-password" name="password" type="password"
+                     autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
+              ${renderPasswordToggleButton()}
+            </div>
             <span class="form-error form-error-multiline" data-err="password"></span>
           </div>
 
           <div class="form-field">
             <label class="form-label" for="rp-confirm">${t("auth.reset.confirmPassword")}</label>
-            <input class="input" id="rp-confirm" name="confirmPassword" type="password"
-                   autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
+            <div class="password-input-wrap">
+              <input class="input password-input" id="rp-confirm" name="confirmPassword" type="password"
+                     autocomplete="new-password" placeholder="${t("auth.signup.passwordPlaceholder")}" required />
+              ${renderPasswordToggleButton()}
+            </div>
             <span class="form-error" data-err="confirmPassword"></span>
           </div>
 
@@ -77,6 +84,7 @@ function mountForm() {
     form.elements.namedItem("confirmPassword"),
     root.querySelector("[data-err='confirmPassword']"),
   );
+  mountPasswordToggles(root);
 
   function clearErrors() {
     setText(banner, "");
