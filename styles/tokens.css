@@ -36,7 +36,7 @@
   --glass-bg: rgba(255, 255, 255, 0.72);
   --glass-bg-card: rgba(255, 255, 255, 0.60);
   --glass-bg-nav: rgba(255, 255, 255, 0.90);
-  --glass-border: rgba(26, 31, 54, 0.08);
+  --glass-border: rgba(26, 31, 54, 0.35);
   --glass-blur: blur(20px) saturate(160%);
   --glass-blur-heavy: blur(28px) saturate(180%);
   --glass-inner-top: inset 0 1px 0 rgba(255, 255, 255, 0.92);

@@ -9,6 +9,10 @@ import {
   login as authLogin,
   signup as authSignup,
   logout as authLogout,
+  loginWithGoogle as authLoginWithGoogle,
+  signupWithGoogle as authSignupWithGoogle,
+  completeOAuthRole as authCompleteOAuthRole,
+  userNeedsRoleSelection as authUserNeedsRoleSelection,
   requestPasswordReset as authRequestPasswordReset,
   sendPasswordResetEmail as authSendPasswordResetEmail,
   completePasswordReset as authCompletePasswordReset,
@@ -17,13 +21,15 @@ import {
 } from "../services/auth.service.js";
 import { getListingById as getListingByIdSvc, getUserListings as getUserListingsSvc, searchListings as searchListingsSvc, getTrendingListings as getTrendingListingsSvc } from "../services/listings.service.js";
 
-let initialized = false;
+let initPromise = null;
 
 export async function initAppState() {
-  if (initialized) return;
-  initialized = true;
-  await initAuthSession();
-  watchSession();
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    await initAuthSession();
+    watchSession();
+  })();
+  return initPromise;
 }
 
 export async function login(input) {
@@ -32,6 +38,22 @@ export async function login(input) {
 
 export async function signup(input) {
   return authSignup(input);
+}
+
+export async function loginWithGoogle() {
+  return authLoginWithGoogle();
+}
+
+export async function signupWithGoogle() {
+  return authSignupWithGoogle();
+}
+
+export async function completeOAuthRole(role) {
+  return authCompleteOAuthRole(role);
+}
+
+export async function userNeedsRoleSelection() {
+  return authUserNeedsRoleSelection();
 }
 
 export async function logout() {

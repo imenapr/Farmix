@@ -1,9 +1,10 @@
 import { boot } from "../app/boot.js";
-import { signup } from "../app/auth-state.js";
+import { signup, signupWithGoogle } from "../app/auth-state.js";
 import { toast, qs, setText } from "../app/ui.js";
 import { t, onLanguageChange } from "../app/i18n.js";
 import { wirePasswordRuleFeedback, wirePasswordConfirmFeedback } from "../data/validators.js";
 import { mountPasswordToggles, renderPasswordToggleButton } from "../components/password-toggle.js";
+import { renderGoogleAuthButton, renderAuthDivider } from "../components/google-auth-button.js";
 
 boot();
 
@@ -186,6 +187,9 @@ function mountSignup() {
 
       </form>
 
+      ${renderAuthDivider(t("auth.or"))}
+      ${renderGoogleAuthButton({ id: "google-signup-btn", label: t("auth.google.signup") })}
+
       <p class="auth-footer">
         ${t("auth.signup.hasAccount")}
         <a id="login-link" href="/pages/login.html">${t("common.login")}</a>
@@ -201,6 +205,7 @@ function mountSignup() {
   const banner = qs(root, "#err-banner");
   const roleInput = qs(root, "#role-hidden");
   const loginLink = qs(root, "#login-link");
+  const googleBtn = qs(root, "#google-signup-btn");
   const farmWrap = qs(root, "[data-cond='farmName']");
   const compWrap = qs(root, "[data-cond='companyName']");
   const farmInput = form.elements.namedItem("farmName");
@@ -235,8 +240,26 @@ function mountSignup() {
     });
   });
 
+  function setGoogleLoading(on) {
+    if (!googleBtn) return;
+    googleBtn.disabled = on;
+    googleBtn.querySelector("span").textContent = on
+      ? t("auth.google.loading")
+      : t("auth.google.signup");
+  }
+
   const next = new URLSearchParams(location.search).get("next");
   if (next) loginLink.href = `/pages/login.html?next=${encodeURIComponent(next)}`;
+
+  googleBtn?.addEventListener("click", async () => {
+    clearErrors();
+    setGoogleLoading(true);
+    const res = await signupWithGoogle();
+    if (!res.ok) {
+      setGoogleLoading(false);
+      toast("error", res.error.message ?? t("auth.google.failed"));
+    }
+  });
 
 // ─── Error helpers ────────────────────────────────────────────────
   const FIELD_KEYS = ["name", "farmName", "companyName", "location", "phone", "email", "password", "confirmPassword", "role", "form"];

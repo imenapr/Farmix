@@ -1,7 +1,8 @@
 import { boot } from "../app/boot.js";
-import { login } from "../app/auth-state.js";
+import { login, loginWithGoogle } from "../app/auth-state.js";
 import { toast, qs, setText } from "../app/ui.js";
 import { initLanguageFromUrl, t, onLanguageChange, getCurrentLang } from "../app/i18n.js";
+import { renderGoogleAuthButton, renderAuthDivider } from "../components/google-auth-button.js";
 
 initLanguageFromUrl();
 boot();
@@ -50,6 +51,9 @@ function render() {
           <button class="btn btn-primary btn-full" type="submit" data-submit>${t("auth.login.button")}</button>
         </form>
 
+        ${renderAuthDivider(t("auth.or"))}
+        ${renderGoogleAuthButton({ id: "google-login-btn", label: t("auth.google.continue") })}
+
         <p class="auth-footer">
           ${t("auth.login.noAccount")}
           <a id="signup-link" href="/pages/signup.html">${t("common.signUp")}</a>
@@ -64,6 +68,7 @@ function render() {
   const errEmail = qs(root, "[data-err='email']");
   const errPass = qs(root, "[data-err='password']");
   const signupLink = qs(root, "#signup-link");
+  const googleBtn = qs(root, "#google-login-btn");
 
   function clearErrors() {
     setText(banner, "");
@@ -76,8 +81,26 @@ function render() {
     submitBtn.textContent = on ? t("auth.login.loading") : t("auth.login.button");
   }
 
+  function setGoogleLoading(on) {
+    if (!googleBtn) return;
+    googleBtn.disabled = on;
+    googleBtn.querySelector("span").textContent = on
+      ? t("auth.google.loading")
+      : t("auth.google.continue");
+  }
+
   const next = new URLSearchParams(location.search).get("next");
   if (next) signupLink.href = `/pages/signup.html?next=${encodeURIComponent(next)}`;
+
+  googleBtn?.addEventListener("click", async () => {
+    clearErrors();
+    setGoogleLoading(true);
+    const res = await loginWithGoogle();
+    if (!res.ok) {
+      setGoogleLoading(false);
+      toast("error", res.error.message ?? t("auth.google.failed"));
+    }
+  });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();

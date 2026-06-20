@@ -5,6 +5,10 @@
 export {
   login,
   signup,
+  loginWithGoogle,
+  signupWithGoogle,
+  completeOAuthRole,
+  userNeedsRoleSelection,
   logout,
   requestPasswordReset,
   sendPasswordResetEmail,

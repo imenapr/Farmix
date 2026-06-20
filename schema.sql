@@ -202,11 +202,29 @@ CREATE POLICY "Users can insert their own profile" ON public.users
   FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- Policy: Users can update their own profile
+CREATE OR REPLACE FUNCTION public.oauth_pending_role_selection()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT coalesce(
+    (SELECT (raw_user_meta_data->>'pending_role_selection')::boolean
+     FROM auth.users WHERE id = auth.uid()),
+    false
+  );
+$$;
+
 CREATE POLICY "Users can update own profile" ON public.users
   FOR UPDATE USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id AND
-    -- Users cannot change their own role or suspended status
-    (role = (SELECT role FROM public.users WHERE id = auth.uid()) OR role = 'consumer') AND
+    -- Users cannot change their own role or suspended status (except during OAuth onboarding)
+    (
+      role = (SELECT role FROM public.users WHERE id = auth.uid())
+      OR role = 'consumer'
+      OR public.oauth_pending_role_selection()
+    ) AND
     (suspended = (SELECT suspended FROM public.users WHERE id = auth.uid()))
   );
 

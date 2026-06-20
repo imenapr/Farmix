@@ -101,29 +101,322 @@ async function upsertUserProfile(row) {
   return !error;
 }
 
+async function insertUserProfile(row) {
+  const supabase = getSupabase();
+  const { error } = await supabase.from("users").insert(row);
+  if (!error) return { ok: true, duplicate: false };
+  if (error.code === "23505") return { ok: true, duplicate: true };
+  return { ok: false, duplicate: false };
+}
+
+function googleOAuthRedirectTo() {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  return undefined;
+}
+
+function oauthParamsFromUrl() {
+  if (typeof window === "undefined") return { search: new URLSearchParams(), hash: new URLSearchParams() };
+  const search = new URLSearchParams(window.location.search);
+  const hash = window.location.hash?.startsWith("#")
+    ? new URLSearchParams(window.location.hash.slice(1))
+    : new URLSearchParams();
+  return { search, hash };
+}
+
+function consumeOAuthUrlError() {
+  if (typeof window === "undefined") return null;
+  const { search, hash } = oauthParamsFromUrl();
+  const description =
+    search.get("error_description") ||
+    hash.get("error_description") ||
+    search.get("error") ||
+    hash.get("error");
+  if (!description) return null;
+
+  const normalized = String(description).toLowerCase();
+  if (normalized.includes("access_denied") || normalized.includes("cancel")) {
+    return t("auth.google.cancelled", { default: "Google sign-in was cancelled." });
+  }
+  return t("auth.google.failed", { default: "Could not sign in with Google. Try again." });
+}
+
+function cleanOAuthUrl() {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  const oauthKeys = ["code", "error", "error_description", "access_token", "refresh_token", "type"];
+  let dirty = false;
+
+  for (const key of oauthKeys) {
+    if (url.searchParams.has(key)) {
+      url.searchParams.delete(key);
+      dirty = true;
+    }
+  }
+
+  if (url.hash && (url.hash.includes("access_token") || url.hash.includes("error"))) {
+    url.hash = "";
+    dirty = true;
+  }
+
+  if (dirty) {
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  }
+}
+
+function needsRoleSelection(authUser) {
+  return authUser?.user_metadata?.pending_role_selection === true;
+}
+
+function redirectToCompleteProfileIfNeeded(authUser) {
+  if (typeof window === "undefined" || !authUser) return;
+  if (!needsRoleSelection(authUser)) return;
+  if (window.location.pathname.includes("complete-profile.html")) return;
+  window.location.replace("/pages/complete-profile.html");
+}
+
+function displayNameFromAuthUser(authUser) {
+  const meta = authUser.user_metadata ?? {};
+  return (
+    meta.full_name ||
+    meta.name ||
+    authUser.email?.split("@")[0] ||
+    "User"
+  );
+}
+
+function avatarUrlFromAuthUser(authUser) {
+  const meta = authUser.user_metadata ?? {};
+  return meta.avatar_url || meta.picture || null;
+}
+
+async function ensureProfileForAuthUser(authUser) {
+  const existing = await fetchUserProfile(authUser.id);
+  if (existing) return { profile: existing, created: false };
+
+  const now = new Date().toISOString();
+  const profileRow = {
+    id: authUser.id,
+    email: authUser.email ?? "",
+    name: displayNameFromAuthUser(authUser),
+    role: ROLES.consumer,
+    location: "",
+    avatar_url: avatarUrlFromAuthUser(authUser),
+    created_at: now,
+    updated_at: now,
+  };
+
+  const inserted = await insertUserProfile(profileRow);
+  if (!inserted.ok) {
+    emit("toast", {
+      type: "error",
+      message: t("service.profileSaveFailed", {
+        default: "Account created but profile save failed. Try logging in.",
+      }),
+    });
+    return { profile: null, created: false, error: true };
+  }
+
+  if (inserted.duplicate) {
+    const profile = await fetchUserProfile(authUser.id);
+    return { profile, created: false };
+  }
+
+  const supabase = getSupabase();
+  const { error: metaError } = await supabase.auth.updateUser({
+    data: { pending_role_selection: true },
+  });
+  if (!metaError) {
+    await supabase.auth.refreshSession();
+  }
+
+  return { profile: userFromDb(profileRow), created: true };
+}
+
+async function resolveAuthenticatedUser(session) {
+  const authUser = session?.user;
+  if (!authUser?.id) {
+    setCurrentUserInternal(null);
+    return null;
+  }
+
+  if (authUser.app_metadata?.provider === "google" || authUser.identities?.some((i) => i.provider === "google")) {
+    const result = await ensureProfileForAuthUser(authUser);
+    if (result.error) {
+      setCurrentUserInternal(null);
+      return null;
+    }
+    if (result.profile?.suspended) {
+      await getSupabase().auth.signOut();
+      setCurrentUserInternal(null);
+      return null;
+    }
+    setCurrentUserInternal(result.profile);
+    if (result.created) {
+      emit("toast", {
+        type: "success",
+        message: t("auth.google.welcome", {
+          name: result.profile.name,
+          default: `Welcome, ${result.profile.name}!`,
+        }),
+      });
+      if (typeof window !== "undefined" && !window.location.pathname.includes("complete-profile.html")) {
+        window.location.replace("/pages/complete-profile.html");
+      }
+    } else {
+      redirectToCompleteProfileIfNeeded(authUser);
+    }
+    return result.profile;
+  }
+
+  const cachedProfile = getCachedProfile(authUser.id);
+  if (cachedProfile) {
+    currentUser = cachedProfile;
+    emit("auth:changed", { user: currentUser });
+    return cachedProfile;
+  }
+
+  const profile = await fetchUserProfile(authUser.id);
+  setCurrentUserInternal(profile);
+  return profile;
+}
+
+async function signInWithGoogleOAuth() {
+  const redirectTo = googleOAuthRedirectTo();
+  if (!redirectTo) {
+    return err(
+      "AUTH_ERROR",
+      t("auth.google.unavailable", { default: "Google sign-in is unavailable here." }),
+    );
+  }
+
+  const supabase = getSupabase();
+  try {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo },
+    });
+
+    if (error) {
+      return err(
+        "AUTH_ERROR",
+        t("auth.google.failed", { default: "Could not sign in with Google. Try again." }),
+      );
+    }
+
+    return ok(null);
+  } catch {
+    return err(
+      "AUTH_ERROR",
+      t("auth.google.failed", { default: "Could not sign in with Google. Try again." }),
+    );
+  }
+}
+
+export async function loginWithGoogle() {
+  return signInWithGoogleOAuth();
+}
+
+export async function signupWithGoogle() {
+  return signInWithGoogleOAuth();
+}
+
+export async function completeOAuthRole(role) {
+  if (![ROLES.farmer, ROLES.business, ROLES.consumer].includes(role)) {
+    return err(
+      "VALIDATION_FAILED",
+      t("service.roleInvalid", { default: "Select a valid role." }),
+      { role: t("service.roleInvalid", { default: "Select a valid role." }) },
+    );
+  }
+
+  const supabase = getSupabase();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+    return err("AUTH_REQUIRED", t("auth.completeProfile.signInRequired", { default: "Sign in to continue." }));
+  }
+
+  if (!needsRoleSelection(session.user)) {
+    const profile = await fetchUserProfile(session.user.id);
+    if (profile) {
+      setCurrentUserInternal(profile);
+      return ok({ user: profile, alreadyComplete: true });
+    }
+  }
+
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("users")
+    .update({ role, updated_at: now })
+    .eq("id", session.user.id)
+    .select()
+    .single();
+
+  if (error || !data) {
+    return err(
+      "DB_ERROR",
+      t("auth.completeProfile.failed", { default: "Could not save your profile. Try again." }),
+    );
+  }
+
+  await supabase.auth.updateUser({
+    data: { pending_role_selection: false, role },
+  });
+  await supabase.auth.refreshSession();
+
+  const profile = userFromDb(data);
+  setCurrentUserInternal(profile);
+
+  if (role === ROLES.farmer) {
+    const { data: admins } = await supabase.from("users").select("id").eq("role", ROLES.admin);
+    for (const admin of admins ?? []) {
+      createNotification({
+        userId: admin.id,
+        type: "system",
+        title: t("service.newFarmer", { default: "New farmer registered" }),
+        message: `New farmer registered: ${profile.name} (${profile.email ?? ""})`,
+        metadata: {
+          farmerId: session.user.id,
+          farmerName: profile.name,
+          farmerEmail: profile.email ?? null,
+        },
+      });
+    }
+  }
+
+  return ok({ user: profile });
+}
+
+export async function userNeedsRoleSelection() {
+  const supabase = getSupabase();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return false;
+  return needsRoleSelection(session.user);
+}
+
 // ─── Session init (Supabase authoritative) ───────────────────────────────────
 export async function initAuthSession() {
   const supabase = getSupabase();
 
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.id) {
+    const oauthErrorMessage = consumeOAuthUrlError();
+    if (oauthErrorMessage) {
+      emit("toast", { type: "error", message: oauthErrorMessage });
+      cleanOAuthUrl();
       setCurrentUserInternal(null);
       return;
     }
 
-    // Role cache: skip the Supabase round-trip if we fetched this user's
-    // profile recently. RLS still guards every real admin operation, so a
-    // fresh cached role is safe to trust for UI purposes only.
-    const cachedProfile = getCachedProfile(session.user.id);
-    if (cachedProfile) {
-      currentUser = cachedProfile;
-      emit("auth:changed", { user: currentUser });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) {
+      setCurrentUserInternal(null);
+      cleanOAuthUrl();
       return;
     }
 
-    const profile = await fetchUserProfile(session.user.id);
-    setCurrentUserInternal(profile);
+    await resolveAuthenticatedUser(session);
+    cleanOAuthUrl();
     return;
   } catch {
     setCurrentUserInternal(null);
@@ -360,33 +653,25 @@ export async function waitForRecoverySession(timeoutMs = 4000) {
 
 export function watchSession() {
   const supabase = getSupabase();
-  supabase.auth.onAuthStateChange(async (event) => {
+  supabase.auth.onAuthStateChange(async (event, nextSession) => {
     if (event === "SIGNED_OUT") {
       setCurrentUserInternal(null);
       return;
     }
-    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user?.id) {
+    if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+      if (!nextSession?.user?.id) {
         setCurrentUserInternal(null);
         return;
       }
-      const cachedProfile = getCachedProfile(session.user.id);
-      if (cachedProfile) {
-        setCurrentUserInternal(cachedProfile);
-        return;
-      }
-      const profile = await fetchUserProfile(session.user.id);
-      setCurrentUserInternal(profile);
+      await resolveAuthenticatedUser(nextSession);
       return;
     }
     if (event === "USER_UPDATED") {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user?.id) {
+      if (!nextSession?.user?.id) {
         setCurrentUserInternal(null);
         return;
       }
-      const profile = await fetchUserProfile(session.user.id);
+      const profile = await fetchUserProfile(nextSession.user.id);
       setCurrentUserInternal(profile);
     }
   });
