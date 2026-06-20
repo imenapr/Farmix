@@ -8,6 +8,50 @@ boot();
 const root = document.getElementById("complete-profile-root");
 if (!root) throw new Error("Missing #complete-profile-root");
 
+let savedFormState = null;
+
+function optionalFieldLabel(forId, labelKey) {
+  return `
+    <label class="form-label form-label-row" for="${forId}">
+      <span>${t(labelKey)}</span>
+      <span class="form-label-optional">(${t("common.optional")})</span>
+    </label>
+  `;
+}
+
+function captureFormState() {
+  const form = qs(root, "#complete-profile-form");
+  if (!form) return null;
+  const fd = new FormData(form);
+  return {
+    ...Object.fromEntries(fd.entries()),
+    role: qs(root, "#role-hidden")?.value || "",
+  };
+}
+
+function restoreFormState(state) {
+  if (!state) return;
+  const form = qs(root, "#complete-profile-form");
+  if (!form) return;
+
+  for (const [name, value] of Object.entries(state)) {
+    if (name === "role") continue;
+    const el = form.elements.namedItem(name);
+    if (el) el.value = value ?? "";
+  }
+
+  if (state.role) {
+    const roleInput = qs(root, "#role-hidden");
+    const card = root.querySelector(`.role-card[data-role='${state.role}']`);
+    if (roleInput && card) {
+      roleInput.value = state.role;
+      root.querySelectorAll(".role-card[data-role]").forEach((c) => c.classList.remove("selected"));
+      card.classList.add("selected");
+      syncConditionalFields(state.role);
+    }
+  }
+}
+
 async function ensureAccess() {
   await initAppState();
   const user = getCurrentUser();
@@ -67,6 +111,32 @@ function render() {
           <input type="hidden" name="role" id="role-hidden" value="" />
           <span class="form-error" data-err="role" style="display:block; margin-bottom:0.75rem;"></span>
 
+          <div class="conditional-field" data-cond="farmName">
+            <div class="form-field">
+              ${optionalFieldLabel("cp-farmName", "auth.signup.farmName")}
+              <input class="input" id="cp-farmName" name="farmName"
+                     placeholder="${t("auth.signup.farmNamePlaceholder")}" />
+              <span class="form-error" data-err="farmName"></span>
+            </div>
+          </div>
+
+          <div class="conditional-field" data-cond="companyName">
+            <div class="form-field">
+              <label class="form-label" for="cp-companyName">${t("auth.signup.companyName")}</label>
+              <input class="input" id="cp-companyName" name="companyName"
+                     placeholder="${t("auth.signup.companyNamePlaceholder")}" />
+              <span class="form-error" data-err="companyName"></span>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="cp-phone">${t("auth.signup.phone")}</label>
+            <input class="input" id="cp-phone" name="phone"
+                   type="tel" autocomplete="tel" inputmode="tel"
+                   placeholder="${t("auth.signup.phonePlaceholder")}" required />
+            <span class="form-error" data-err="phone"></span>
+          </div>
+
           <button class="btn btn-primary btn-full" type="submit" data-submit>
             ${t("auth.completeProfile.button")}
           </button>
@@ -76,41 +146,71 @@ function render() {
   `;
 
   const form = qs(root, "#complete-profile-form");
+  restoreFormState(savedFormState);
+
   const submitBtn = qs(root, "[data-submit]");
   const banner = qs(root, "#err-banner");
   const roleInput = qs(root, "#role-hidden");
   const roleCards = root.querySelectorAll(".role-card[data-role]");
+  const farmWrap = qs(root, "[data-cond='farmName']");
+  const compWrap = qs(root, "[data-cond='companyName']");
+  const farmInput = form.elements.namedItem("farmName");
+  const compInput = form.elements.namedItem("companyName");
+
+  function syncConditionalFields(role) {
+    const isFarmer = role === "farmer";
+    const isBusiness = role === "business";
+    farmWrap.classList.toggle("visible", isFarmer);
+    compWrap.classList.toggle("visible", isBusiness);
+    if (!isFarmer) farmInput.value = "";
+    if (!isBusiness) compInput.value = "";
+  }
 
   roleCards.forEach((card) => {
     card.addEventListener("click", () => {
       roleCards.forEach((c) => c.classList.remove("selected"));
       card.classList.add("selected");
       roleInput.value = card.dataset.role;
+      syncConditionalFields(card.dataset.role);
       setText(root.querySelector("[data-err='role']"), "");
     });
   });
 
+  if (roleInput.value) syncConditionalFields(roleInput.value);
+
+  const FIELD_KEYS = ["role", "phone", "farmName", "companyName"];
+
+  function clearErrors() {
+    setText(banner, "");
+    for (const k of FIELD_KEYS) {
+      const el = root.querySelector(`[data-err='${k}']`);
+      if (el) setText(el, "");
+    }
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    setText(banner, "");
-    setText(root.querySelector("[data-err='role']"), "");
+    clearErrors();
 
-    const role = roleInput.value;
-    if (!role) {
-      setText(root.querySelector("[data-err='role']"), t("service.roleInvalid"));
-      return;
-    }
-
+    const fd = new FormData(form);
     submitBtn.disabled = true;
     submitBtn.textContent = t("auth.completeProfile.loading");
 
-    const res = await completeOAuthRole(role);
+    const res = await completeOAuthRole({
+      role: fd.get("role"),
+      phone: fd.get("phone"),
+      farmName: fd.get("farmName"),
+      companyName: fd.get("companyName"),
+    });
 
     if (!res.ok) {
       submitBtn.disabled = false;
       submitBtn.textContent = t("auth.completeProfile.button");
       const fe = res.error.fieldErrors ?? {};
-      if (fe.role) setText(root.querySelector("[data-err='role']"), fe.role);
+      for (const [k, msg] of Object.entries(fe)) {
+        const el = root.querySelector(`[data-err='${k}']`);
+        if (el) setText(el, msg);
+      }
       setText(banner, res.error.message ?? t("auth.completeProfile.failed"));
       toast("error", res.error.message ?? t("auth.completeProfile.failed"));
       return;
@@ -125,7 +225,10 @@ async function start() {
   const allowed = await ensureAccess();
   if (!allowed) return;
   render();
-  onLanguageChange(render);
+  onLanguageChange(() => {
+    savedFormState = captureFormState();
+    render();
+  });
 }
 
 start();

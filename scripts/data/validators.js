@@ -202,6 +202,44 @@ export function validateSignup(input) {
   });
 }
 
+export function validateCompleteProfile(input) {
+  const fieldErrors = {};
+
+  const roleR = validateRole(input?.role);
+  if (!roleR.ok) Object.assign(fieldErrors, roleR.fieldErrors);
+
+  const phoneR = validatePhone(input?.phone);
+  if (!phoneR.ok) Object.assign(fieldErrors, phoneR.fieldErrors);
+
+  const farmName = String(input?.farmName ?? "").trim();
+  const companyName = String(input?.companyName ?? "").trim();
+
+  if (roleR.ok && roleR.value === ROLES.farmer) {
+    if (farmName.length > 60) fieldErrors.farmName = "Farm name is too long.";
+    if (companyName) fieldErrors.companyName = "Business company name is not allowed for farmer role.";
+  }
+
+  if (roleR.ok && roleR.value === ROLES.business) {
+    if (!companyName) fieldErrors.companyName = "Company name is required for business accounts.";
+    if (companyName.length > 60) fieldErrors.companyName = "Company name is too long.";
+    if (farmName) fieldErrors.farmName = "Farm name is not allowed for business role.";
+  }
+
+  if (roleR.ok && roleR.value === ROLES.consumer) {
+    if (farmName) fieldErrors.farmName = "Consumers cannot set a farm name.";
+    if (companyName) fieldErrors.companyName = "Consumers cannot set a company name.";
+  }
+
+  if (Object.keys(fieldErrors).length) return fail(fieldErrors);
+
+  return ok({
+    role: roleR.value,
+    phone: phoneR.value,
+    farmName: farmName || undefined,
+    companyName: companyName || undefined,
+  });
+}
+
 export function validateForgotPassword(input) {
   return validateEmail(input?.email);
 }

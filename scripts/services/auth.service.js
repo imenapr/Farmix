@@ -2,7 +2,7 @@ import { STORAGE_KEYS } from "../app/config.js";
 import { emit } from "../app/events.js";
 import { getSupabase } from "../lib/supabase.js";
 import { userFromDb } from "../lib/transform.js";
-import { validateLogin, validateSignup, validateForgotPassword, validateResetPassword } from "../data/validators.js";
+import { validateLogin, validateSignup, validateForgotPassword, validateResetPassword, validateCompleteProfile } from "../data/validators.js";
 import { authEmailFromPhone } from "../lib/auth-email.js";
 import { createNotification } from "./notifications.service.js";
 import { findEmailByPhone } from "./users.service.js";
@@ -322,15 +322,17 @@ export async function signupWithGoogle() {
   return signInWithGoogleOAuth();
 }
 
-export async function completeOAuthRole(role) {
-  if (![ROLES.farmer, ROLES.business, ROLES.consumer].includes(role)) {
+export async function completeOAuthRole(input) {
+  const v = validateCompleteProfile(input);
+  if (!v.ok) {
     return err(
       "VALIDATION_FAILED",
-      t("service.roleInvalid", { default: "Select a valid role." }),
-      { role: t("service.roleInvalid", { default: "Select a valid role." }) },
+      t("service.fixHighlighted", { default: "Fix the highlighted fields." }),
+      v.fieldErrors,
     );
   }
 
+  const { role, phone, farmName, companyName } = v.value;
   const supabase = getSupabase();
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user?.id) {
@@ -345,10 +347,30 @@ export async function completeOAuthRole(role) {
     }
   }
 
+  const { data: existingPhone } = await supabase
+    .from("users")
+    .select("id")
+    .eq("phone", phone)
+    .neq("id", session.user.id)
+    .maybeSingle();
+  if (existingPhone) {
+    return err(
+      "CONFLICT",
+      t("service.phoneExists", { default: "An account with this phone number already exists." }),
+      { phone: t("service.phoneExists", { default: "An account with this phone number already exists." }) },
+    );
+  }
+
   const now = new Date().toISOString();
   const { data, error } = await supabase
     .from("users")
-    .update({ role, updated_at: now })
+    .update({
+      role,
+      phone,
+      farm_name: farmName || null,
+      company_name: companyName || null,
+      updated_at: now,
+    })
     .eq("id", session.user.id)
     .select()
     .single();
