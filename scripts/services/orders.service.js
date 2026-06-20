@@ -1,11 +1,11 @@
 import { getSupabase } from "../lib/supabase.js";
 import { ROLES } from "../app/config.js";
+import { t } from "../app/i18n.js";
 import { getListingById } from "./listings.service.js";
 import { getCurrentUser } from "./auth.service.js";
+import { createNotification } from "./notifications.service.js";
 import { keysToCamel } from "../lib/transform.js";
 import { invalidateCache } from "../lib/cache.js";
-import { createNotification } from "./notifications.service.js";
-import { t } from "../app/i18n.js";
 
 const ORDER_STATUSES = ["pending", "accepted", "shipped", "delivered", "cancelled"];
 
@@ -169,18 +169,25 @@ export async function placeOrder(buyerId, listingId, quantity) {
   order.title = listing.title;
   order.unit = listing.unit;
 
+  const buyerName = user.name || user.email?.split("@")[0] || t("service.orderAnonymousBuyer", { default: "A buyer" });
   await createNotification({
     userId: listing.sellerId,
     type: "order",
     title: t("service.newOrder", { default: "New order" }),
     message: t("service.newOrderMessage", {
-      default: `${user.name || "A buyer"} ordered ${qty} ${listing.unit} of "${listing.title}".`,
-      buyer: user.name || t("common.buyer"),
-      qty: String(qty),
+      default: `${buyerName} placed an order for ${qty} ${listing.unit} of "${listing.title}".`,
+      name: buyerName,
+      qty,
       unit: listing.unit,
       title: listing.title,
     }),
-    metadata: { orderId: order.id, listingId, buyerId: user.id, quantity: qty },
+    metadata: {
+      orderId: order.id,
+      listingId,
+      buyerId: user.id,
+      quantity: qty,
+      totalPrice,
+    },
   });
 
   return ok(order);
