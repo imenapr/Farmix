@@ -6,6 +6,7 @@ import { createListing } from "../services/listings.service.js";
 import { t, onLanguageChange, translatePageHead, getCategoryLabel } from "../app/i18n.js";
 import { getCategories } from "../data/categories.js";
 import { CURRENCIES, getCurrencySymbol, priceToStorageGEL } from "../lib/currency.js";
+import { compressImageToDataUrl } from "../lib/image-utils.js";
 
 boot();
 translatePageHead("listingForm.addPageTitle", "listingForm.addPageSubtitle");
@@ -21,12 +22,7 @@ let savedFormState = null;
 let pendingImages = [];
 
 function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
+  return compressImageToDataUrl(file);
 }
 
 function unitOptions(selected = "") {
@@ -245,12 +241,16 @@ function wireImagePicker(form) {
 
     for (const file of files.slice(0, slotsLeft)) {
       if (!file.type.startsWith("image/")) continue;
-      const dataUrl = await readFileAsDataUrl(file);
-      pendingImages.push({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-        file,
-        dataUrl,
-      });
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        pendingImages.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+          file,
+          dataUrl,
+        });
+      } catch {
+        toast("error", t("listingForm.imageTooLarge", { default: "Image could not be added. Try a smaller file." }));
+      }
     }
 
     renderPreviews();

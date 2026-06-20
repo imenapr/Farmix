@@ -1,9 +1,10 @@
 import { getSupabase } from "../lib/supabase.js";
-import { invalidateCache } from "../lib/cache.js";
+import { getCache, setCache, invalidateCache } from "../lib/cache.js";
 import { validateReviewInput } from "../data/validators.js";
 import { t } from "../app/i18n.js";
 
 const LISTINGS_CACHE_PREFIX = "listings:";
+const RATINGS_CACHE_TTL = 90_000;
 
 function err(code, message, fieldErrors) {
   return { ok: false, error: { code, message, fieldErrors } };
@@ -29,6 +30,10 @@ function reviewFromDb(row) {
 export async function getRatingsForListings(listingIds) {
   if (!listingIds.length) return ok({});
 
+  const cacheKey = `ratings:batch:${[...listingIds].sort().join(",")}`;
+  const cached = getCache(cacheKey);
+  if (cached) return ok(cached);
+
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from("listing_reviews")
@@ -46,6 +51,7 @@ export async function getRatingsForListings(listingIds) {
     map[id].quality.push(Number(row.quality_rating));
   }
 
+  setCache(cacheKey, map, RATINGS_CACHE_TTL);
   return ok(map);
 }
 

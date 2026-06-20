@@ -1,6 +1,7 @@
 import { getSupabase } from "../lib/supabase.js";
 import { getCache, setCache, invalidateCache } from "../lib/cache.js";
 import { listingFromDb, listingToDb } from "../lib/transform.js";
+import { slimListingImages } from "../lib/image-utils.js";
 import { validateListingInput, validateMarketplaceFilters } from "../data/validators.js";
 import { ROLES } from "../app/config.js";
 import { emit } from "../app/events.js";
@@ -90,7 +91,13 @@ export async function incrementListingView(listingId) {
 }
 
 const LISTING_CARD_COLUMNS =
-  "id,seller_id,title,description,category_id,price,unit,quantity_available,location,images,status,view_count,created_at,updated_at";
+  "id,seller_id,title,category_id,price,unit,quantity_available,location,images,status,view_count,created_at,updated_at";
+
+const SELLER_LISTING_COLUMNS = LISTING_CARD_COLUMNS;
+
+function mapListings(rows) {
+  return (rows ?? []).map((row) => slimListingImages(listingFromDb(row)));
+}
 
 export async function getTrendingListings(limit = 6) {
   const safeLimit = clamp(Number(limit) || 6, 1, 24);
@@ -103,12 +110,13 @@ export async function getTrendingListings(limit = 6) {
     .from("listings")
     .select(LISTING_CARD_COLUMNS)
     .eq("status", "active")
+    .order("view_count", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(safeLimit);
 
   if (error) return err("DB_ERROR", error.message);
 
-  let items = (data ?? []).map(listingFromDb);
+  let items = mapListings(data);
   items = await attachRatings(items);
   items.forEach((l) => setCache(`${LISTINGS_CACHE_PREFIX}id:${l.id}`, l, LISTING_TTL));
   setCache(cacheKey, items, SEARCH_TTL);
@@ -156,7 +164,7 @@ export async function searchListings(filters = new URLSearchParams()) {
   const { data, error, count } = await query.range(start, end);
   if (error) return err("DB_ERROR", error.message);
 
-  let paginated = (data ?? []).map(listingFromDb);
+  let paginated = mapListings(data);
   paginated = await attachRatings(paginated);
   paginated.forEach((l) => setCache(`${LISTINGS_CACHE_PREFIX}id:${l.id}`, l, LISTING_TTL));
 
@@ -172,22 +180,25 @@ export async function searchListings(filters = new URLSearchParams()) {
   return ok(result);
 }
 
-export async function getUserListings(userId) {
-  const cacheKey = `${LISTINGS_CACHE_PREFIX}seller:${userId}`;
+export async function getUserListings(userId, { limit = 100, offset = 0 } = {}) {
+  const safeLimit = clamp(Number(limit) || 100, 1, 200);
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const cacheKey = `${LISTINGS_CACHE_PREFIX}seller:${userId}:${safeLimit}:${safeOffset}`;
   const cached = getCache(cacheKey);
   if (cached) return ok(cached);
 
   const supabase = getSupabase();
   const { data, error } = await supabase
     .from("listings")
-    .select("*")
+    .select(SELLER_LISTING_COLUMNS)
     .eq("seller_id", userId)
     .neq("status", "archived")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(safeOffset, safeOffset + safeLimit - 1);
 
   if (error) return err("DB_ERROR", error.message);
 
-  const items = (data ?? []).map(listingFromDb);
+  const items = mapListings(data);
   const withRatings = await attachRatings(items);
   setCache(cacheKey, withRatings, LISTING_TTL);
   return ok(withRatings);

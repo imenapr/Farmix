@@ -4,7 +4,7 @@ import { toast, qs, setText, escapeHtml } from "../app/ui.js";
 import { logout as doLogout } from "../app/auth-state.js";
 import { initAppState } from "../app/state.js";
 import { formatAuthIdentifier } from "../lib/auth-email.js";
-import { getUserById, updateProfile } from "../services/users.service.js";
+import { updateProfile } from "../services/users.service.js";
 import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
 
 boot();
@@ -179,14 +179,7 @@ if (root) {
   guardAuth().then(async (user) => {
     if (!user) return;
     accountUser = user;
-
-    const fetched = await getUserById(user.id);
-    if (!fetched.ok) {
-      root.innerHTML = `<div class="state-block"><h2 class="state-title">${t("account.notFound")}</h2><p class="state-desc">${t("account.notFoundDesc")}</p></div>`;
-      return;
-    }
-
-    accountRecord = fetched.data;
+    accountRecord = user;
     renderAccountForm();
     onLanguageChange(() => {
       translatePageHead("account.pageTitle", "account.pageSubtitle");

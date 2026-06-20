@@ -109,11 +109,41 @@ async function insertUserProfile(row) {
   return { ok: false, duplicate: false };
 }
 
-function googleOAuthRedirectTo() {
+function googleOAuthRedirectTo(relativePath = "/index.html") {
   if (typeof window !== "undefined" && window.location?.origin) {
-    return window.location.origin;
+    const path = String(relativePath || "/index.html").startsWith("/")
+      ? relativePath
+      : `/${relativePath}`;
+    return `${window.location.origin}${path}`;
   }
   return undefined;
+}
+
+function isGoogleAuthUser(authUser) {
+  return (
+    authUser?.app_metadata?.provider === "google" ||
+    authUser?.identities?.some((i) => i.provider === "google")
+  );
+}
+
+function authUserNeedsProfileCompletion(authUser, profile) {
+  if (!authUser) return false;
+  if (needsRoleSelection(authUser)) return true;
+  if (!isGoogleAuthUser(authUser)) return false;
+  return !String(profile?.phone ?? "").trim();
+}
+
+async function redirectToCompleteProfileIfNeeded(authUser, profile = null) {
+  if (typeof window === "undefined" || !authUser) return;
+  if (window.location.pathname.includes("complete-profile.html")) return;
+
+  const supabase = getSupabase();
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user ?? authUser;
+  const resolvedProfile = profile ?? (await fetchUserProfile(user.id));
+
+  if (!authUserNeedsProfileCompletion(user, resolvedProfile)) return;
+  window.location.replace("/pages/complete-profile.html");
 }
 
 function oauthParamsFromUrl() {
@@ -167,13 +197,6 @@ function cleanOAuthUrl() {
 
 function needsRoleSelection(authUser) {
   return authUser?.user_metadata?.pending_role_selection === true;
-}
-
-function redirectToCompleteProfileIfNeeded(authUser) {
-  if (typeof window === "undefined" || !authUser) return;
-  if (!needsRoleSelection(authUser)) return;
-  if (window.location.pathname.includes("complete-profile.html")) return;
-  window.location.replace("/pages/complete-profile.html");
 }
 
 function displayNameFromAuthUser(authUser) {
@@ -261,12 +284,8 @@ async function resolveAuthenticatedUser(session) {
           default: `Welcome, ${result.profile.name}!`,
         }),
       });
-      if (typeof window !== "undefined" && !window.location.pathname.includes("complete-profile.html")) {
-        window.location.replace("/pages/complete-profile.html");
-      }
-    } else {
-      redirectToCompleteProfileIfNeeded(authUser);
     }
+    await redirectToCompleteProfileIfNeeded(authUser, result.profile);
     return result.profile;
   }
 
@@ -282,8 +301,8 @@ async function resolveAuthenticatedUser(session) {
   return profile;
 }
 
-async function signInWithGoogleOAuth() {
-  const redirectTo = googleOAuthRedirectTo();
+async function signInWithGoogleOAuth(redirectPath = "/index.html") {
+  const redirectTo = googleOAuthRedirectTo(redirectPath);
   if (!redirectTo) {
     return err(
       "AUTH_ERROR",
@@ -315,11 +334,11 @@ async function signInWithGoogleOAuth() {
 }
 
 export async function loginWithGoogle() {
-  return signInWithGoogleOAuth();
+  return signInWithGoogleOAuth("/index.html");
 }
 
 export async function signupWithGoogle() {
-  return signInWithGoogleOAuth();
+  return signInWithGoogleOAuth("/pages/complete-profile.html");
 }
 
 export async function completeOAuthRole(input) {
@@ -339,11 +358,11 @@ export async function completeOAuthRole(input) {
     return err("AUTH_REQUIRED", t("auth.completeProfile.signInRequired", { default: "Sign in to continue." }));
   }
 
-  if (!needsRoleSelection(session.user)) {
-    const profile = await fetchUserProfile(session.user.id);
-    if (profile) {
-      setCurrentUserInternal(profile);
-      return ok({ user: profile, alreadyComplete: true });
+  const existingProfile = await fetchUserProfile(session.user.id);
+  if (!authUserNeedsProfileCompletion(session.user, existingProfile)) {
+    if (existingProfile) {
+      setCurrentUserInternal(existingProfile);
+      return ok({ user: existingProfile, alreadyComplete: true });
     }
   }
 
@@ -414,8 +433,11 @@ export async function userNeedsRoleSelection() {
   const supabase = getSupabase();
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.user) return false;
-  return needsRoleSelection(session.user);
+  const profile = await fetchUserProfile(session.user.id);
+  return authUserNeedsProfileCompletion(session.user, profile);
 }
+
+let authSessionReady = false;
 
 // ─── Session init (Supabase authoritative) ───────────────────────────────────
 export async function initAuthSession() {
@@ -427,6 +449,7 @@ export async function initAuthSession() {
       emit("toast", { type: "error", message: oauthErrorMessage });
       cleanOAuthUrl();
       setCurrentUserInternal(null);
+      authSessionReady = true;
       return;
     }
 
@@ -434,14 +457,17 @@ export async function initAuthSession() {
     if (!session?.user?.id) {
       setCurrentUserInternal(null);
       cleanOAuthUrl();
+      authSessionReady = true;
       return;
     }
 
     await resolveAuthenticatedUser(session);
     cleanOAuthUrl();
+    authSessionReady = true;
     return;
   } catch {
     setCurrentUserInternal(null);
+    authSessionReady = true;
   }
 }
 
@@ -681,6 +707,7 @@ export function watchSession() {
       return;
     }
     if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+      if (event === "INITIAL_SESSION" && authSessionReady) return;
       if (!nextSession?.user?.id) {
         setCurrentUserInternal(null);
         return;

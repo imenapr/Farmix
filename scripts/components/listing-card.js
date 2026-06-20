@@ -77,7 +77,7 @@ export function renderListingCard(
           ? `<a class="listing-media" href="${href}" aria-label="${escapeHtml(t("listing.viewProduct", { title: listing.title }))}">`
           : `<div class="listing-media">`
       }
-        <img src="${escapeHtml(img)}" alt="${escapeHtml(listing.title)}" width="600" height="440" loading="lazy" />
+        <img src="${escapeHtml(img)}" alt="${escapeHtml(listing.title)}" width="600" height="440" loading="lazy" decoding="async" fetchpriority="low" />
         <div class="listing-media-overlay">
           <span class="listing-badge-cat">${escapeHtml(categoryName)}</span>
         </div>

@@ -149,6 +149,8 @@ CREATE INDEX idx_listing_reviews_listing_id ON public.listing_reviews(listing_id
 CREATE INDEX idx_listing_reviews_user_id ON public.listing_reviews(user_id);
 CREATE INDEX IF NOT EXISTS idx_listings_active_created ON public.listings(created_at DESC) WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_listings_active_price ON public.listings(price) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_listings_active_views ON public.listings(view_count DESC, created_at DESC) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_listings_active_category_created ON public.listings(category_id, created_at DESC) WHERE status = 'active';
 
 -- ============================================================================
 -- ROW-LEVEL SECURITY (RLS) - ENABLE ON ALL TABLES

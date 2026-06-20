@@ -68,7 +68,7 @@ function renderLatest() {
   if (!mount) return;
 
   if (latestItems === null) {
-    mount.innerHTML = renderSkeletonCards(3);
+    mount.innerHTML = renderSkeletonCards(6);
     return;
   }
 
@@ -93,7 +93,7 @@ function renderLatest() {
 
 function loadLatest() {
   if (!mount) return;
-  mount.innerHTML = renderSkeletonCards(3);
+  mount.innerHTML = renderSkeletonCards(6);
 
   getTrendingListings(6).then((res) => {
     if (!res.ok) {
