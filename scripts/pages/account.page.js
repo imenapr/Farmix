@@ -1,10 +1,12 @@
 import { boot } from "../app/boot.js";
 import { guardAuth } from "../app/router-guards.js";
-import { toast, qs, setText, escapeHtml } from "../app/ui.js";
+import { toast, qs, setText, escapeHtml, productListingUrl } from "../app/ui.js";
 import { logout as doLogout } from "../app/auth-state.js";
 import { initAppState } from "../app/state.js";
 import { formatAuthIdentifier } from "../lib/auth-email.js";
+import { formatPrice, getDisplayCurrency } from "../lib/currency.js";
 import { updateProfile } from "../services/users.service.js";
+import { listOrdersForBuyer } from "../services/orders.service.js";
 import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
 
 boot();
@@ -13,7 +15,12 @@ translatePageHead("account.pageTitle", "account.pageSubtitle");
 const root = document.getElementById("account-root");
 let accountUser = null;
 let accountRecord = null;
+let buyerOrders = [];
 let savedFormState = null;
+
+function isBuyerRole(role) {
+  return role === "consumer" || role === "business";
+}
 
 function captureFormState(form) {
   if (!form) return null;
@@ -27,6 +34,94 @@ function restoreFormState(form, state) {
     const el = form.elements.namedItem(name);
     if (el) el.value = value ?? "";
   }
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return t("admin.dash");
+  return d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+
+function orderStatusLabel(status) {
+  return t(`orders.status.${status}`, { default: status });
+}
+
+function sellerLabel(order) {
+  if (order.sellerName) return order.sellerName;
+  if (order.sellerEmail) return order.sellerEmail;
+  return t("common.seller");
+}
+
+function sellerProfileUrl(sellerId) {
+  return `/pages/profile.html?id=${encodeURIComponent(sellerId)}`;
+}
+
+function renderBuyerOrdersSection() {
+  if (!accountRecord || !isBuyerRole(accountRecord.role)) return "";
+
+  const currency = getDisplayCurrency();
+
+  return `
+    <section class="card pad acct-orders" aria-labelledby="acct-orders-title">
+      <div class="acct-orders-head">
+        <div>
+          <h2 class="acct-orders-title" id="acct-orders-title">${t("account.myOrders")}</h2>
+          <p class="acct-orders-sub">${t("account.myOrdersSub")}</p>
+        </div>
+        <span class="acct-orders-count">${buyerOrders.length}</span>
+      </div>
+      ${
+        buyerOrders.length
+          ? `
+        <div class="acct-table-wrap">
+          <table class="acct-table">
+            <thead>
+              <tr>
+                <th>${t("common.listing")}</th>
+                <th>${t("account.orderSeller")}</th>
+                <th>${t("common.quantity")}</th>
+                <th>${t("common.total")}</th>
+                <th>${t("common.status")}</th>
+                <th>${t("account.orderPlaced")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${buyerOrders
+                .map(
+                  (o) => `
+                <tr>
+                  <td>
+                    <a class="acct-row-link" href="${escapeHtml(productListingUrl(o.listingId))}">
+                      ${escapeHtml(o.listingTitle ?? t("common.listing"))}
+                    </a>
+                  </td>
+                  <td>
+                    <a class="acct-row-link" href="${escapeHtml(sellerProfileUrl(o.sellerId))}">
+                      ${escapeHtml(sellerLabel(o))}
+                    </a>
+                  </td>
+                  <td>${Number(o.quantity ?? 0)} ${escapeHtml(o.unit ?? "")}</td>
+                  <td>${escapeHtml(formatPrice(o.totalPrice, currency))}</td>
+                  <td>
+                    <span class="acct-order-status acct-order-status--${escapeHtml(o.status)}">
+                      ${escapeHtml(orderStatusLabel(o.status))}
+                    </span>
+                  </td>
+                  <td>${escapeHtml(formatDate(o.createdAt))}</td>
+                </tr>`,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>`
+          : `
+        <div class="acct-empty">
+          <p style="margin:0 0 0.75rem;">${t("account.noOrdersYet")}</p>
+          <a class="btn btn-primary btn-sm" href="/pages/marketplace.html">${t("common.goToMarketplace")}</a>
+        </div>`
+      }
+    </section>
+  `;
 }
 
 function renderAccountForm() {
@@ -106,6 +201,7 @@ function renderAccountForm() {
         </div>
       </form>
     </section>
+    ${renderBuyerOrdersSection()}
   `;
 
   const form = qs(root, "#profile-form");
@@ -175,11 +271,21 @@ function renderAccountForm() {
   });
 }
 
+async function loadBuyerOrders(userId) {
+  const res = await listOrdersForBuyer(userId);
+  buyerOrders = res.ok ? res.data : [];
+}
+
 if (root) {
   guardAuth().then(async (user) => {
     if (!user) return;
     accountUser = user;
     accountRecord = user;
+
+    if (isBuyerRole(user.role)) {
+      await loadBuyerOrders(user.id);
+    }
+
     renderAccountForm();
     onLanguageChange(() => {
       translatePageHead("account.pageTitle", "account.pageSubtitle");

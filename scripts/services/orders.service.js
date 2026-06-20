@@ -33,6 +33,22 @@ function enrichOrders(orders, buyers, listings) {
   });
 }
 
+function enrichBuyerOrders(orders, sellers, listings) {
+  const sellerMap = new Map((sellers ?? []).map((s) => [s.id, keysToCamel(s)]));
+  const listingMap = new Map((listings ?? []).map((l) => [l.id, keysToCamel(l)]));
+
+  return orders.map((row) => {
+    const order = keysToCamel(row);
+    const seller = sellerMap.get(order.sellerId);
+    const listing = listingMap.get(order.listingId);
+    order.sellerName = seller?.farmName || seller?.name || null;
+    order.sellerEmail = seller?.email ?? null;
+    order.listingTitle = listing?.title ?? null;
+    order.unit = listing?.unit ?? null;
+    return order;
+  });
+}
+
 export async function listOrdersForSeller(sellerId) {
   const user = getCurrentUser();
   if (!user) return err("AUTH_REQUIRED", t("common.loginRequired"));
@@ -60,6 +76,35 @@ export async function listOrdersForSeller(sellerId) {
   ]);
 
   return ok(enrichOrders(orders, buyers, listings));
+}
+
+export async function listOrdersForBuyer(buyerId) {
+  const user = getCurrentUser();
+  if (!user) return err("AUTH_REQUIRED", t("common.loginRequired"));
+  if (String(buyerId) !== String(user.id) && user.role !== ROLES.admin) {
+    return err("FORBIDDEN", t("service.notAllowed", { default: "Not allowed." }));
+  }
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("buyer_id", buyerId)
+    .order("created_at", { ascending: false });
+
+  if (error) return err("DB_ERROR", error.message);
+  const orders = data ?? [];
+  if (!orders.length) return ok([]);
+
+  const sellerIds = [...new Set(orders.map((o) => o.seller_id))];
+  const listingIds = [...new Set(orders.map((o) => o.listing_id))];
+
+  const [{ data: sellers }, { data: listings }] = await Promise.all([
+    supabase.from("users").select("id,name,email,farm_name").in("id", sellerIds),
+    supabase.from("listings").select("id,title,unit").in("id", listingIds),
+  ]);
+
+  return ok(enrichBuyerOrders(orders, sellers, listings));
 }
 
 export async function updateOrderStatus(orderId, status) {
