@@ -1,0 +1,44 @@
+#account-root {
+  display: grid;
+  gap: 1rem;
+}
+
+.account-favorites {
+  max-width: 960px;
+}
+
+.account-favorites-head {
+  margin-bottom: 0.85rem;
+}
+
+.account-favorites-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  letter-spacing: -0.01em;
+}
+
+.account-favorites-subtitle {
+  margin: 0.35rem 0 0;
+  font-size: var(--text-sm);
+}
+
+.account-favorites-grid {
+  display: grid;
+  gap: 0.85rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.account-favorite-item {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.account-favorite-remove {
+  justify-self: start;
+}
+
+@media (min-width: 720px) {
+  .account-favorites-grid {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+}

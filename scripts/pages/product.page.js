@@ -18,6 +18,7 @@ import { createInquiry } from "../services/messages.service.js";
 import { reportListing } from "../services/reports.service.js";
 import { getUserById } from "../services/users.service.js";
 import { placeOrder } from "../services/orders.service.js";
+import { isListingFavorited, toggleFavorite } from "../services/favorites.service.js";
 import { openGuestGate } from "../components/guest-gate.js";
 import { t, onLanguageChange, translatePageHead, getCategoryLabel, getCurrentLang } from "../app/i18n.js";
 import { getCategoryById } from "../data/categories.js";
@@ -90,6 +91,8 @@ let descExpanded = false;
 let viewsCounted = false;
 let inquiryDraft = "";
 let userReview = null;
+let isFavorited = false;
+let favoriteBusy = false;
 let reportSubmitted = false;
 let reportModalEl = null;
 
@@ -398,9 +401,10 @@ async function loadListing() {
   }
 
   const user = getCurrentUser();
-  const [listingRes, reviewRes] = await Promise.all([
+  const [listingRes, reviewRes, favoriteRes] = await Promise.all([
     getListingById(listingId),
     user ? getUserReviewForListing(listingId, user.id) : Promise.resolve({ ok: true, data: null }),
+    user ? isListingFavorited(listingId, user.id) : Promise.resolve({ ok: true, data: false }),
   ]);
 
   if (!listingRes.ok) {
@@ -414,6 +418,7 @@ async function loadListing() {
 
   listing = listingRes.data;
   userReview = null;
+  isFavorited = favoriteRes.ok ? Boolean(favoriteRes.data) : false;
   if (user && !isListingOwner(user, listing) && reviewRes.ok) {
     userReview = reviewRes.data;
   }
@@ -438,6 +443,29 @@ function revealSellerPhone(phone) {
        <a class="seller-phone-value" href="tel:${escapeHtml(phoneValue.replace(/\D/g, ""))}">${escapeHtml(phoneValue)}</a>`
     : `<span class="muted" style="font-size:var(--text-sm);">${t("product.phoneMissing")}</span>`;
   revealBtn?.remove();
+}
+
+function renderFavoriteButton(user, isOwner) {
+  if (isOwner) return "";
+
+  const label = isFavorited ? t("product.savedListing") : t("product.saveListing");
+  const ariaLabel = isFavorited ? t("product.savedListingAria") : t("product.saveListingAria");
+
+  return `
+    <button
+      type="button"
+      class="favorite-btn ${isFavorited ? "is-active" : ""}"
+      data-toggle-favorite
+      aria-pressed="${isFavorited ? "true" : "false"}"
+      aria-label="${escapeHtml(ariaLabel)}"
+      ${favoriteBusy ? "disabled" : ""}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+      </svg>
+      <span class="favorite-btn-label">${escapeHtml(label)}</span>
+    </button>
+  `;
 }
 
 function renderPage() {
@@ -480,7 +508,10 @@ function renderPage() {
         </div>
 
         <div>
-          <h1 class="product-title">${escapeHtml(listing.title)}</h1>
+          <div class="product-title-row">
+            <h1 class="product-title">${escapeHtml(listing.title)}</h1>
+            ${renderFavoriteButton(user, isOwner)}
+          </div>
           <div class="product-price">${escapeHtml(price)} / ${escapeHtml(listing.unit)}</div>
 
           <div class="listing-meta" style="margin-top:0.6rem;">
@@ -669,6 +700,34 @@ function renderPage() {
     reportBtn.addEventListener("click", openReportModal);
   }
 
+  const favoriteBtn = root.querySelector("[data-toggle-favorite]");
+  if (favoriteBtn) {
+    favoriteBtn.addEventListener("click", async () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        openGuestGate();
+        return;
+      }
+      if (favoriteBusy) return;
+
+      favoriteBusy = true;
+      favoriteBtn.disabled = true;
+
+      const res = await toggleFavorite(currentUser.id, listingId, isFavorited);
+      favoriteBusy = false;
+
+      if (!res.ok) {
+        favoriteBtn.disabled = false;
+        toast("error", res.error.message ?? t("favorites.failed"));
+        return;
+      }
+
+      isFavorited = Boolean(res.data.favorited);
+      toast("success", isFavorited ? t("favorites.added") : t("favorites.removed"));
+      renderPage();
+    });
+  }
+
   const orderBtn = root.querySelector("[data-place-order]");
   if (orderBtn && showOrderCta && orderQty > 0) {
     orderBtn.addEventListener("click", () => {
@@ -844,9 +903,14 @@ async function refreshAuthDependentState() {
   if (!listing || !listingId) return;
   const user = getCurrentUser();
   userReview = null;
+  isFavorited = false;
   if (user && !isListingOwner(user, listing)) {
-    const reviewRes = await getUserReviewForListing(listingId, user.id);
+    const [reviewRes, favoriteRes] = await Promise.all([
+      getUserReviewForListing(listingId, user.id),
+      isListingFavorited(listingId, user.id),
+    ]);
     if (reviewRes.ok) userReview = reviewRes.data;
+    if (favoriteRes.ok) isFavorited = Boolean(favoriteRes.data);
   }
   renderPage();
 }

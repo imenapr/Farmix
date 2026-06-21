@@ -1,11 +1,14 @@
 import { boot } from "../app/boot.js";
 import { guardAuth } from "../app/router-guards.js";
-import { toast, qs, setText, escapeHtml } from "../app/ui.js";
+import { toast, qs, setText, escapeHtml, renderStateBlock, mountListingCardLinks } from "../app/ui.js";
 import { logout as doLogout } from "../app/auth-state.js";
 import { formatAuthIdentifier } from "../lib/auth-email.js";
 import { updateProfile } from "../services/users.service.js";
 import { uploadUserAvatar } from "../services/avatar.service.js";
+import { listFavoritesForUser, removeFavorite } from "../services/favorites.service.js";
 import { renderUserAvatar, wireUserAvatarFallbacks } from "../components/user-avatar.js";
+import { renderListingCard } from "../components/listing-card.js";
+import { getDisplayCurrency } from "../lib/currency.js";
 import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
 
 boot();
@@ -15,6 +18,8 @@ const root = document.getElementById("account-root");
 let accountUser = null;
 let accountRecord = null;
 let savedFormState = null;
+let favoriteListings = null;
+let favoritesLoading = false;
 
 function captureFormState(form) {
   if (!form) return null;
@@ -30,9 +35,117 @@ function restoreFormState(form, state) {
   }
 }
 
+function ensureProfileSection() {
+  if (!root.querySelector("[data-profile-section]")) {
+    root.innerHTML = `<div data-profile-section></div>`;
+  }
+  return root.querySelector("[data-profile-section]");
+}
+
+function renderFavoritesSection() {
+  const existing = root?.querySelector("[data-favorites-section]");
+  if (existing) existing.remove();
+  if (!root || !accountUser) return;
+
+  const section = document.createElement("section");
+  section.className = "card pad account-favorites";
+  section.dataset.favoritesSection = "true";
+
+  if (favoritesLoading) {
+    section.innerHTML = `
+      <header class="account-favorites-head">
+        <h2 class="account-favorites-title">${escapeHtml(t("account.favoritesTitle"))}</h2>
+        <p class="muted account-favorites-subtitle">${escapeHtml(t("account.favoritesSubtitle"))}</p>
+      </header>
+      <div class="account-favorites-grid">
+        <div class="skeleton" style="height: 220px; border-radius: 18px;"></div>
+        <div class="skeleton" style="height: 220px; border-radius: 18px;"></div>
+      </div>
+    `;
+    root.appendChild(section);
+    return;
+  }
+
+  const listings = favoriteListings ?? [];
+  const currency = getDisplayCurrency();
+
+  section.innerHTML = `
+    <header class="account-favorites-head">
+      <h2 class="account-favorites-title">${escapeHtml(t("account.favoritesTitle"))}</h2>
+      <p class="muted account-favorites-subtitle">${escapeHtml(t("account.favoritesSubtitle"))}</p>
+    </header>
+    ${
+      listings.length
+        ? `
+      <div class="account-favorites-grid" data-favorites-grid>
+        ${listings
+          .map(
+            (listing) => `
+          <div class="account-favorite-item" data-favorite-item="${escapeHtml(listing.id)}">
+            ${renderListingCard(listing, { compact: true, currency })}
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm account-favorite-remove"
+              data-remove-favorite="${escapeHtml(listing.id)}"
+              aria-label="${escapeHtml(t("favorites.removeAria"))}: ${escapeHtml(listing.title)}"
+            >
+              ${escapeHtml(t("favorites.remove"))}
+            </button>
+          </div>
+        `,
+          )
+          .join("")}
+      </div>
+    `
+        : renderStateBlock({
+            title: t("favorites.empty"),
+            actionsHtml: `<a class="btn btn-primary" href="/pages/marketplace.html">${escapeHtml(t("favorites.browse"))}</a>`,
+          })
+    }
+  `;
+
+  root.appendChild(section);
+
+  const grid = section.querySelector("[data-favorites-grid]");
+  if (grid) {
+    mountListingCardLinks(grid);
+    grid.querySelectorAll("[data-remove-favorite]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const listingId = btn.getAttribute("data-remove-favorite");
+        if (!listingId || !accountUser) return;
+
+        btn.disabled = true;
+        const res = await removeFavorite(accountUser.id, listingId);
+        if (!res.ok) {
+          btn.disabled = false;
+          toast("error", res.error.message ?? t("favorites.failed"));
+          return;
+        }
+
+        favoriteListings = (favoriteListings ?? []).filter((item) => String(item.id) !== String(listingId));
+        toast("success", t("favorites.removed"));
+        renderFavoritesSection();
+      });
+    });
+  }
+}
+
+async function loadFavorites() {
+  if (!accountUser) return;
+  favoritesLoading = true;
+  renderFavoritesSection();
+
+  const res = await listFavoritesForUser(accountUser.id);
+  favoritesLoading = false;
+  favoriteListings = res.ok ? res.data : [];
+  if (!res.ok) toast("error", res.error.message ?? t("favorites.failed"));
+  renderFavoritesSection();
+}
+
 function renderAccountForm() {
   if (!accountUser || !accountRecord) return;
 
+  const profileRoot = ensureProfileSection();
   const record = accountRecord;
   const isFarmer = record.role === "farmer";
   const isBusiness = record.role === "business";
@@ -43,7 +156,7 @@ function renderAccountForm() {
     admin: t("nav.role.admin"),
   }[record.role] ?? record.role;
 
-  root.innerHTML = `
+  profileRoot.innerHTML = `
     <section class="card pad" style="max-width: 720px;">
       <form id="profile-form" class="stack" novalidate>
         <div class="account-avatar-block">
@@ -113,13 +226,13 @@ function renderAccountForm() {
     </section>
   `;
 
-  const form = qs(root, "#profile-form");
-  const submitBtn = qs(root, "[data-submit]");
-  const logoutBtn = qs(root, "[data-logout]");
-  const avatarPreview = qs(root, "#avatar-preview");
-  const avatarFileInput = qs(root, "#avatar-file");
-  const avatarChangeBtn = qs(root, "#avatar-change-btn");
-  const avatarErr = qs(root, "[data-err='avatar']");
+  const form = qs(profileRoot, "#profile-form");
+  const submitBtn = qs(profileRoot, "[data-submit]");
+  const logoutBtn = qs(profileRoot, "[data-logout]");
+  const avatarPreview = qs(profileRoot, "#avatar-preview");
+  const avatarFileInput = qs(profileRoot, "#avatar-file");
+  const avatarChangeBtn = qs(profileRoot, "#avatar-change-btn");
+  const avatarErr = qs(profileRoot, "[data-err='avatar']");
 
   wireUserAvatarFallbacks(avatarPreview);
 
@@ -172,7 +285,7 @@ function renderAccountForm() {
   setVal("companyName", record.companyName);
   restoreFormState(form, savedFormState);
 
-  const err = (k) => qs(root, `[data-err='${k}']`);
+  const err = (k) => qs(profileRoot, `[data-err='${k}']`);
   const errForm = err("form");
 
   function clearErrors() {
@@ -201,7 +314,7 @@ function renderAccountForm() {
     if (!res.ok) {
       setLoading(false);
       for (const [k, msg] of Object.entries(res.error.fieldErrors ?? {})) {
-        const el = root.querySelector(`[data-err='${k}']`);
+        const el = profileRoot.querySelector(`[data-err='${k}']`);
         if (el) el.textContent = msg;
       }
       setText(errForm, res.error.message ?? t("service.fixHighlighted"));
@@ -218,6 +331,8 @@ function renderAccountForm() {
     toast("success", t("account.loggedOut"));
     location.href = "/index.html";
   });
+
+  renderFavoritesSection();
 }
 
 if (root) {
@@ -226,9 +341,10 @@ if (root) {
     accountUser = user;
     accountRecord = user;
     renderAccountForm();
+    loadFavorites();
     onLanguageChange(() => {
       translatePageHead("account.pageTitle", "account.pageSubtitle");
-      savedFormState = captureFormState(qs(root, "#profile-form"));
+      savedFormState = captureFormState(root.querySelector("#profile-form"));
       renderAccountForm();
     });
   });
