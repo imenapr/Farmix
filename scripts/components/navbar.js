@@ -10,6 +10,7 @@ import {
   markAllRead,
   primeNotificationCache,
 } from "../services/notifications.service.js";
+import { renderUserAvatar, wireUserAvatarFallbacks } from "./user-avatar.js";
 
 // ─── Role state ─────────────────────────────────────────────────────────────
 let _role = "guest";
@@ -64,19 +65,14 @@ function roleLinks(role) {
   }
 }
 
-function initials(name) {
-  return String(name ?? "")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? "")
-    .join("");
-}
-
 function esc(str) {
   return String(str ?? "")
     .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+function userAvatarHtml(user) {
+  return renderUserAvatar(user, { size: "sm", className: "nav-avatar-slot" });
 }
 
 function timeAgo(ts) {
@@ -105,7 +101,6 @@ function renderNav({ user } = {}) {
 
   const badgeClass   = roleBadgeClass(role);
   const badgeLabel   = roleBadgeLabel(role);
-  const userInitials = isAuthed ? initials(user.name) : "";
   const lang = getCurrentLang();
 
   const bellHtml = isAuthed ? `
@@ -139,7 +134,7 @@ function renderNav({ user } = {}) {
   const drawerAuthHtml = isAuthed ? `
     <a class="nav-drawer-link" href="/pages/messages.html">${t("nav.messages")}</a>
     <a class="nav-drawer-link nav-drawer-account" href="/pages/account.html">
-      <span class="nav-avatar" aria-hidden="true">${userInitials}</span>
+      ${userAvatarHtml(user)}
       <span>${esc(user.name)}</span>
     </a>
     <button class="btn btn-ghost btn-full-mobile" type="button" data-action="logout">${t("common.logout")}</button>
@@ -213,7 +208,7 @@ function renderNav({ user } = {}) {
           ${bellHtml}
           ${isAuthed ? `
             <a class="nav-user nav-desktop-only" href="/pages/account.html" aria-label="${t("nav.openAccount")}">
-              <span class="nav-avatar" aria-hidden="true">${userInitials}</span>
+              ${userAvatarHtml(user)}
               <span class="nav-user-name">${esc(user.name)}</span>
             </a>
             <button class="btn btn-ghost nav-desktop-only" type="button" data-action="logout">${t("common.logout")}</button>
@@ -273,6 +268,7 @@ export function mountNavbar(targetEl) {
     document.body.classList.remove("nav-open");
 
     targetEl.innerHTML = renderNav(payload);
+    wireUserAvatarFallbacks(targetEl);
 
     const navToggle = targetEl.querySelector("[data-action='nav-toggle']");
     const navClose = targetEl.querySelector("[data-action='nav-close']");

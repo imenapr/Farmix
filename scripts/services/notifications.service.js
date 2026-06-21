@@ -24,23 +24,19 @@ function invalidateNotifyCache(userId) {
 
 export async function createNotification({ userId, type, title, message, metadata = {} }) {
   const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("notifications")
-    .insert({
-      user_id: userId,
-      type,
-      title: title ?? type,
-      message,
-      metadata,
-      created_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
+  const { error } = await supabase.from("notifications").insert({
+    user_id: userId,
+    type,
+    title: title ?? type,
+    message,
+    metadata,
+    created_at: new Date().toISOString(),
+  });
 
   if (error) return err("DB_ERROR", error.message);
   invalidateNotifyCache(userId);
   emit("notifications:changed", { userId });
-  return ok(keysToCamel(data));
+  return ok({ userId });
 }
 
 export async function getNotificationsForUser(userId, { limit = 20 } = {}) {

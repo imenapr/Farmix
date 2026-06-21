@@ -532,7 +532,13 @@ document.getElementById("om-confirm").addEventListener("click", async () => {
     card.setAttribute("data-qty", newQty);
     const availEl = card.querySelector(".listing-avail");
     if (availEl) {
-      availEl.textContent = newQty > 0 ? t("listing.availableShort", { n: newQty }) : t("marketplace.outOfStock");
+      if (newQty > 0) {
+        availEl.classList.remove("listing-avail--unavailable");
+        availEl.textContent = t("listing.availableShort", { n: newQty });
+      } else {
+        availEl.classList.add("listing-avail--unavailable");
+        availEl.textContent = t("listing.notAvailable");
+      }
     }
     const orderBtn = card.querySelector(".btn-order");
     if (orderBtn && newQty <= 0) {

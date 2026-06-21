@@ -2,6 +2,7 @@ import { getSupabase } from "../lib/supabase.js";
 import { userFromDb, keysToSnake } from "../lib/transform.js";
 import { validateProfileUpdate } from "../data/validators.js";
 import { getCache, setCache, invalidateCache } from "../lib/cache.js";
+import { emit } from "../app/events.js";
 
 const USER_CACHE_PREFIX = "users:id:";
 const USER_TTL = 60_000;
@@ -53,5 +54,7 @@ export async function updateProfile(userId, input) {
 
   invalidateCache("listings:");
   invalidateCache(`${USER_CACHE_PREFIX}${userId}`);
-  return ok(userFromDb(data));
+  const user = userFromDb(data);
+  emit("profile:updated", { user });
+  return ok(user);
 }

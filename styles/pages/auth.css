@@ -490,7 +490,7 @@
 
 .google-signup-modal {
   position: relative;
-  width: min(92vw, 520px);
+  width: min(92vw, 720px);
   max-height: min(92vh, 720px);
   overflow-y: auto;
   background: var(--glass-bg-nav);
@@ -509,6 +509,10 @@
 
 .google-signup-modal .auth-subheading {
   margin-bottom: 1.25rem;
+}
+
+.google-signup-modal .conditional-field.visible {
+  max-height: 130px;
 }
 
 .google-signup-close {

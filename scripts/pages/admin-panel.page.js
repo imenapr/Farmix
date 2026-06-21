@@ -1,13 +1,12 @@
 import { boot } from "../app/boot.js";
 import { logout } from "../app/auth-state.js";
 import { guardAdmin } from "../app/router-guards.js";
-import { escapeHtml } from "../app/ui.js";
+import { escapeHtml, toast } from "../app/ui.js";
 import {
   getSystemStats,
   listUsers,
   listListings,
-  suspendUser,
-  activateUser,
+  deleteUser,
   takeDownListing,
 } from "../services/admin.service.js";
 import { getTheme, toggleTheme } from "../app/theme.js";
@@ -36,6 +35,8 @@ const logoutBtn = document.getElementById("adm-logout-btn");
 const themeToggle = document.getElementById("adm-theme-toggle");
 const refreshUsersBtn = document.getElementById("refresh-users-btn");
 const refreshListingsBtn = document.getElementById("refresh-listings-btn");
+
+let adminUser = null;
 
 function showSection(id) {
   document.querySelectorAll(".adm-section").forEach((s) => s.classList.remove("active"));
@@ -97,6 +98,7 @@ async function ensureAdmin() {
   //   admin                -> allowed through
   const user = await guardAdmin();
   if (!user) return null;
+  adminUser = user;
   if (userName) userName.textContent = `${user.name} · ${t("admin.administrator")}`;
   return user;
 }
@@ -112,7 +114,6 @@ async function renderStats() {
     { label: t("admin.farmers"), value: s.farmerCount },
     { label: t("admin.businesses"), value: s.businessCount },
     { label: t("admin.consumers"), value: s.consumerCount },
-    { label: t("admin.suspended"), value: s.suspendedUsers },
     { label: t("admin.messages"), value: s.totalMessages },
   ];
 
@@ -146,7 +147,7 @@ async function renderUsers() {
     <div class="adm-table-wrap">
       <table class="adm-table">
         <thead>
-          <tr><th>${t("admin.userName")}</th><th>${t("common.email")}</th><th>${t("common.role")}</th><th>${t("common.status")}</th><th>${t("common.actions")}</th></tr>
+          <tr><th>${t("admin.userName")}</th><th>${t("common.email")}</th><th>${t("common.role")}</th><th>${t("common.actions")}</th></tr>
         </thead>
         <tbody>
           ${res.data
@@ -156,12 +157,11 @@ async function renderUsers() {
               <td>${escapeHtml(u.name)}</td>
               <td>${escapeHtml(u.email)}</td>
               <td>${escapeHtml(u.role)}</td>
-              <td>${u.suspended ? t("common.suspended") : t("common.active")}</td>
               <td>
                 ${
-                  u.suspended
-                    ? `<button class="adm-btn adm-btn-ghost" data-action="activate" data-id="${u.id}">${t("admin.activate")}</button>`
-                    : `<button class="adm-btn adm-btn-ghost" data-action="suspend" data-id="${u.id}">${t("admin.suspend")}</button>`
+                  u.id !== adminUser?.id && u.role !== "admin"
+                    ? `<button class="adm-btn adm-btn-ghost" data-action="delete" data-id="${u.id}">${t("admin.deleteUser")}</button>`
+                    : t("admin.dash")
                 }
               </td>
             </tr>`,
@@ -171,12 +171,20 @@ async function renderUsers() {
       </table>
     </div>`;
 
-  usersMount.querySelectorAll("[data-action]").forEach((btn) => {
+  const users = res.data;
+  usersMount.querySelectorAll("[data-action='delete']").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = btn.dataset.id;
-      const action = btn.dataset.action;
-      const r = action === "suspend" ? await suspendUser(id) : await activateUser(id);
-      if (!r.ok) return;
+      const target = users.find((u) => u.id === id);
+      const name = target?.name ?? "";
+      if (!confirm(t("admin.deleteUserConfirm", { name }))) return;
+
+      const r = await deleteUser(id);
+      if (!r.ok) {
+        toast("error", r.error.message ?? t("admin.deleteUserFailed"));
+        return;
+      }
+      toast("success", t("admin.deleteUserSuccess", { name }));
       renderUsers();
       renderStats();
     });

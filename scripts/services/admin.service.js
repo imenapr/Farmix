@@ -25,7 +25,7 @@ export async function getSystemStats() {
 
   const supabase = getSupabase();
   const [usersRes, listingsRes, messagesRes] = await Promise.all([
-    supabase.from("users").select("id, role, suspended", { count: "exact" }),
+    supabase.from("users").select("id, role", { count: "exact" }),
     supabase.from("listings").select("id, status", { count: "exact" }),
     supabase.from("messages").select("id", { count: "exact", head: true }),
   ]);
@@ -36,7 +36,6 @@ export async function getSystemStats() {
   return ok({
     totalUsers: users.length,
     activeListings: listings.filter((l) => l.status === "active").length,
-    suspendedUsers: users.filter((u) => u.suspended).length,
     farmerCount: users.filter((u) => u.role === ROLES.farmer).length,
     businessCount: users.filter((u) => u.role === ROLES.business).length,
     consumerCount: users.filter((u) => u.role === ROLES.consumer).length,
@@ -54,29 +53,22 @@ export async function listUsers() {
   return ok((data ?? []).map(userFromDb));
 }
 
-export async function suspendUser(userId) {
+export async function deleteUser(userId) {
   const guard = requireAdmin();
   if (!guard.ok) return guard;
-  return updateUserFlag(userId, { suspended: true });
-}
 
-export async function activateUser(userId) {
-  const guard = requireAdmin();
-  if (!guard.ok) return guard;
-  return updateUserFlag(userId, { suspended: false });
-}
+  const current = guard.data.user;
+  if (current.id === userId) {
+    return err("FORBIDDEN", "You cannot delete your own account.");
+  }
 
-async function updateUserFlag(userId, patch) {
   const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("users")
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq("id", userId)
-    .select()
-    .single();
+  const { error } = await supabase.rpc("admin_delete_user", { target_user_id: userId });
+  if (error) return err("DB_ERROR", error.message);
 
-  if (error || !data) return err("NOT_FOUND", "User not found.");
-  return ok(userFromDb(data));
+  invalidateCache("users:id:");
+  invalidateCache("listings:");
+  return ok(null);
 }
 
 export async function listListings(opts = { includeArchived: true }) {

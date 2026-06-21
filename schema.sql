@@ -19,11 +19,9 @@ CREATE TABLE IF NOT EXISTS public.users (
   role text NOT NULL DEFAULT 'consumer' CHECK (role IN ('farmer', 'business', 'consumer', 'admin')),
   farm_name text,
   company_name text,
-  location text NOT NULL DEFAULT '',
   bio text,
   avatar_url text,
   verified boolean NOT NULL DEFAULT false,
-  suspended boolean NOT NULL DEFAULT false,
   created_at timestamp with time zone NOT NULL DEFAULT (now() at time zone 'utc'),
   updated_at timestamp with time zone NOT NULL DEFAULT (now() at time zone 'utc')
 );
@@ -188,7 +186,6 @@ AS $$
     SELECT 1 FROM public.users
     WHERE id = uid
       AND role = 'admin'
-      AND suspended = false
   );
 $$;
 
@@ -225,13 +222,12 @@ $$;
 CREATE POLICY "Users can update own profile" ON public.users
   FOR UPDATE USING (auth.uid() = id)
   WITH CHECK (auth.uid() = id AND
-    -- Users cannot change their own role or suspended status (except during OAuth onboarding)
+    -- Users cannot change their own role (except during OAuth onboarding)
     (
       role = (SELECT role FROM public.users WHERE id = auth.uid())
       OR role = 'consumer'
       OR public.oauth_pending_role_selection()
-    ) AND
-    (suspended = (SELECT suspended FROM public.users WHERE id = auth.uid()))
+    )
   );
 
 -- Policy: Admins can view all user data and update any user
@@ -255,7 +251,7 @@ CREATE POLICY "Anyone can view active listings" ON public.listings
 CREATE POLICY "Logged-in users can create listings" ON public.listings
   FOR INSERT WITH CHECK (
     auth.uid() = seller_id AND
-    auth.uid() IN (SELECT id FROM public.users WHERE suspended = false)
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid())
   );
 
 -- Policy: Users can update only their own listings
@@ -289,7 +285,7 @@ CREATE POLICY "Users can view relevant orders" ON public.orders
 CREATE POLICY "Logged-in users can create orders" ON public.orders
   FOR INSERT WITH CHECK (
     auth.uid() = buyer_id AND
-    auth.uid() IN (SELECT id FROM public.users WHERE suspended = false)
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid())
   );
 
 -- Policy: Buyer or seller can update order
@@ -319,7 +315,7 @@ CREATE POLICY "Users can view own messages" ON public.messages
 CREATE POLICY "Logged-in users can send messages" ON public.messages
   FOR INSERT WITH CHECK (
     auth.uid() = sender_id AND
-    auth.uid() IN (SELECT id FROM public.users WHERE suspended = false)
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid())
   );
 
 -- Policy: Sender or recipient can update message (mark as read)
@@ -344,10 +340,12 @@ CREATE POLICY "Users can view own notifications" ON public.notifications
     (public.is_admin(auth.uid()))
   );
 
--- Policy: System (service role) can create notifications
--- Note: This would typically be done via a trigger or service role, not client-side
-CREATE POLICY "Notifications are created by system" ON public.notifications
-  FOR INSERT WITH CHECK (true);
+-- Policy: Authenticated users can create notifications for valid recipients
+CREATE POLICY "Authenticated users can create notifications" ON public.notifications
+  FOR INSERT WITH CHECK (
+    auth.uid() IS NOT NULL
+    AND EXISTS (SELECT 1 FROM public.users WHERE id = user_id)
+  );
 
 -- Policy: User can update own notifications (mark as read)
 CREATE POLICY "Users can update own notifications" ON public.notifications
@@ -370,7 +368,7 @@ CREATE POLICY "Anyone can view favorites" ON public.favorites
 CREATE POLICY "Logged-in users can add favorites" ON public.favorites
   FOR INSERT WITH CHECK (
     auth.uid() = user_id AND
-    auth.uid() IN (SELECT id FROM public.users WHERE suspended = false)
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid())
   );
 
 -- Policy: User can remove their own favorites
@@ -389,7 +387,7 @@ CREATE POLICY "Anyone can view listing reviews" ON public.listing_reviews
 CREATE POLICY "Users can submit listing reviews" ON public.listing_reviews
   FOR INSERT WITH CHECK (
     auth.uid() = user_id AND
-    auth.uid() IN (SELECT id FROM public.users WHERE suspended = false) AND
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid()) AND
     auth.uid() <> (SELECT seller_id FROM public.listings WHERE id = listing_id)
   );
 
@@ -437,6 +435,32 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.increment_listing_view(uuid) TO anon, authenticated;
 
+-- Admin-only: delete auth user (cascades to public.users and related rows)
+CREATE OR REPLACE FUNCTION public.admin_delete_user(target_user_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+  IF NOT public.is_admin(auth.uid()) THEN
+    RAISE EXCEPTION 'not authorized';
+  END IF;
+  IF target_user_id IS NULL THEN
+    RAISE EXCEPTION 'user id required';
+  END IF;
+  IF target_user_id = auth.uid() THEN
+    RAISE EXCEPTION 'cannot delete yourself';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.users WHERE id = target_user_id AND role = 'admin') THEN
+    RAISE EXCEPTION 'cannot delete admin accounts';
+  END IF;
+  DELETE FROM auth.users WHERE id = target_user_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.admin_delete_user(uuid) TO authenticated;
+
 -- ============================================================================
 -- SEED DATA - TEST USERS (Optional: comment out if not needed)
 -- Run after schema is created. These will have placeholder UUIDs.
@@ -447,12 +471,12 @@ GRANT EXECUTE ON FUNCTION public.increment_listing_view(uuid) TO anon, authentic
 -- These seed users are for testing purposes only.
 -- Uncomment and modify the UUIDs based on your actual Supabase Auth users.
 
--- INSERT INTO public.users (id, email, name, phone, role, location, created_at, updated_at)
+-- INSERT INTO public.users (id, email, name, phone, role, created_at, updated_at)
 -- VALUES
---   ('550e8400-e29b-41d4-a716-446655440000'::uuid, 'admin@farmix.local', 'Admin User', '+1-555-0100', 'admin', 'Tbilisi', now(), now()),
---   ('550e8400-e29b-41d4-a716-446655440001'::uuid, 'farmer@farmix.local', 'Farmer User', '+1-555-0101', 'farmer', 'Tbilisi', now(), now()),
---   ('550e8400-e29b-41d4-a716-446655440002'::uuid, 'business@farmix.local', 'Business User', '+1-555-0102', 'business', 'Tbilisi', now(), now()),
---   ('550e8400-e29b-41d4-a716-446655440003'::uuid, 'consumer@farmix.local', 'Consumer User', '+1-555-0103', 'consumer', 'Tbilisi', now(), now());
+--   ('550e8400-e29b-41d4-a716-446655440000'::uuid, 'admin@farmix.local', 'Admin User', '+1-555-0100', 'admin', now(), now()),
+--   ('550e8400-e29b-41d4-a716-446655440001'::uuid, 'farmer@farmix.local', 'Farmer User', '+1-555-0101', 'farmer', now(), now()),
+--   ('550e8400-e29b-41d4-a716-446655440002'::uuid, 'business@farmix.local', 'Business User', '+1-555-0102', 'business', now(), now()),
+--   ('550e8400-e29b-41d4-a716-446655440003'::uuid, 'consumer@farmix.local', 'Consumer User', '+1-555-0103', 'consumer', now(), now());
 
 -- ============================================================================
 -- ADMIN SETUP (run manually — credentials are NEVER stored in the codebase)
@@ -516,3 +540,55 @@ GRANT EXECUTE ON FUNCTION public.increment_listing_view(uuid) TO anon, authentic
 -- Reserved for future geolocation:
 -- ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS latitude numeric;
 -- ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS longitude numeric;
+
+-- Remove user profile location (listings use region_id + village):
+-- ALTER TABLE public.users DROP COLUMN IF EXISTS location;
+
+-- ============================================================================
+-- STORAGE: avatars bucket
+-- ============================================================================
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'avatars',
+  'avatars',
+  true,
+  2097152,
+  ARRAY['image/jpeg', 'image/png', 'image/webp']::text[]
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+CREATE POLICY "Avatar images are publicly accessible"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'avatars');
+
+CREATE POLICY "Users can upload own avatar"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'avatars'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
+
+CREATE POLICY "Users can update own avatar"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (
+  bucket_id = 'avatars'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+)
+WITH CHECK (
+  bucket_id = 'avatars'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
+
+CREATE POLICY "Users can delete own avatar"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'avatars'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);

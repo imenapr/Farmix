@@ -2,9 +2,10 @@ import { boot } from "../app/boot.js";
 import { guardAuth } from "../app/router-guards.js";
 import { toast, qs, setText, escapeHtml } from "../app/ui.js";
 import { logout as doLogout } from "../app/auth-state.js";
-import { initAppState } from "../app/state.js";
 import { formatAuthIdentifier } from "../lib/auth-email.js";
 import { updateProfile } from "../services/users.service.js";
+import { uploadUserAvatar } from "../services/avatar.service.js";
+import { renderUserAvatar, wireUserAvatarFallbacks } from "../components/user-avatar.js";
 import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
 
 boot();
@@ -45,6 +46,15 @@ function renderAccountForm() {
   root.innerHTML = `
     <section class="card pad" style="max-width: 720px;">
       <form id="profile-form" class="stack" novalidate>
+        <div class="account-avatar-block">
+          <div class="account-avatar-preview" id="avatar-preview">
+            ${renderUserAvatar(record, { size: "lg" })}
+          </div>
+          <input type="file" id="avatar-file" accept="image/jpeg,image/png,image/webp" hidden />
+          <button type="button" class="account-avatar-change" id="avatar-change-btn">${t("account.changePhoto")}</button>
+          <span class="error-text" data-err="avatar"></span>
+        </div>
+
         <div class="muted" style="font-size: var(--text-sm);">
           ${t("account.signedInAs")} <strong>${escapeHtml(formatAuthIdentifier(record))}</strong> · ${t("common.role")} <strong>${roleLabel}</strong>
         </div>
@@ -106,6 +116,49 @@ function renderAccountForm() {
   const form = qs(root, "#profile-form");
   const submitBtn = qs(root, "[data-submit]");
   const logoutBtn = qs(root, "[data-logout]");
+  const avatarPreview = qs(root, "#avatar-preview");
+  const avatarFileInput = qs(root, "#avatar-file");
+  const avatarChangeBtn = qs(root, "#avatar-change-btn");
+  const avatarErr = qs(root, "[data-err='avatar']");
+
+  wireUserAvatarFallbacks(avatarPreview);
+
+  function setAvatarPreview(user) {
+    avatarPreview.innerHTML = renderUserAvatar(user, { size: "lg" });
+    wireUserAvatarFallbacks(avatarPreview);
+  }
+
+  avatarChangeBtn?.addEventListener("click", () => {
+    avatarFileInput?.click();
+  });
+
+  avatarFileInput?.addEventListener("change", async () => {
+    const file = avatarFileInput.files?.[0];
+    avatarFileInput.value = "";
+    if (!file) return;
+
+    setText(avatarErr, "");
+    const previewUrl = URL.createObjectURL(file);
+    const previewUser = { ...accountRecord, avatarUrl: previewUrl };
+    setAvatarPreview(previewUser);
+
+    avatarChangeBtn.disabled = true;
+    const res = await uploadUserAvatar(accountUser.id, file);
+    URL.revokeObjectURL(previewUrl);
+    avatarChangeBtn.disabled = false;
+
+    if (!res.ok) {
+      setAvatarPreview(accountRecord);
+      const msg = res.error.fieldErrors?.avatar ?? res.error.message ?? t("account.avatarUploadFailed");
+      setText(avatarErr, msg);
+      toast("error", msg);
+      return;
+    }
+
+    accountRecord = res.data;
+    setAvatarPreview(accountRecord);
+    toast("success", t("account.avatarUpdated"));
+  });
 
   const setVal = (name, value) => {
     const el = form.elements.namedItem(name);
@@ -158,7 +211,6 @@ function renderAccountForm() {
     accountRecord = res.data;
     setLoading(false);
     toast("success", t("account.profileUpdated"));
-    await initAppState();
   });
 
   logoutBtn.addEventListener("click", async () => {

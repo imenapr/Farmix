@@ -1,8 +1,8 @@
 import { STORAGE_KEYS } from "../app/config.js";
-import { emit } from "../app/events.js";
+import { emit, on } from "../app/events.js";
 import { getSupabase } from "../lib/supabase.js";
 import { userFromDb } from "../lib/transform.js";
-import { validateLogin, validateSignup, validateForgotPassword, validateResetPassword, validateRole, validatePhone } from "../data/validators.js";
+import { validateLogin, validateSignup, validateForgotPassword, validateResetPassword, validateGoogleSignupDraft } from "../data/validators.js";
 import { authEmailFromPhone } from "../lib/auth-email.js";
 import { createNotification } from "./notifications.service.js";
 import { findEmailByPhone } from "./users.service.js";
@@ -74,6 +74,12 @@ function setCurrentUserInternal(user) {
   emit("auth:changed", { user: currentUser });
 }
 
+on("profile:updated", ({ user }) => {
+  if (user && currentUser?.id === user.id) {
+    setCurrentUserInternal(user);
+  }
+});
+
 export function getCurrentUser() {
   return currentUser;
 }
@@ -82,7 +88,6 @@ async function fetchUserProfile(userId) {
   const supabase = getSupabase();
   const { data, error } = await supabase.from("users").select("*").eq("id", userId).maybeSingle();
   if (error || !data) return null;
-  if (data.suspended) return null;
   return userFromDb(data);
 }
 
@@ -106,12 +111,51 @@ async function insertUserProfile(row) {
   const { error } = await supabase.from("users").insert(row);
   if (!error) return { ok: true, duplicate: false };
   if (error.code === "23505") return { ok: true, duplicate: true };
-  return { ok: false, duplicate: false };
+  return { ok: false, duplicate: false, message: error.message };
 }
 
-function googleOAuthRedirectTo() {
+function hasOAuthCallbackParams() {
+  if (typeof window === "undefined") return false;
+  const { search, hash } = oauthParamsFromUrl();
+  return (
+    search.has("code") ||
+    hash.has("access_token") ||
+    search.has("error") ||
+    hash.has("error")
+  );
+}
+
+async function waitForOAuthSession(supabase, timeoutMs = 8000) {
+  if (!hasOAuthCallbackParams()) return null;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (session) => {
+      if (settled) return;
+      settled = true;
+      subscription.unsubscribe();
+      clearTimeout(timer);
+      resolve(session ?? null);
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session?.user?.id) {
+        finish(session);
+      }
+    });
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.id) finish(session);
+    });
+
+    const timer = setTimeout(() => finish(null), timeoutMs);
+  });
+}
+
+function googleOAuthRedirectTo(path = "/") {
   if (typeof window !== "undefined" && window.location?.origin) {
-    return window.location.origin;
+    const normalized = path.startsWith("/") ? path : `/${path}`;
+    return `${window.location.origin}${normalized}`;
   }
   return undefined;
 }
@@ -126,6 +170,8 @@ function readGoogleSignupDraft() {
     return {
       role: String(parsed.role ?? "").trim(),
       phone: String(parsed.phone ?? "").trim(),
+      farmName: String(parsed.farmName ?? "").trim(),
+      companyName: String(parsed.companyName ?? "").trim(),
     };
   } catch {
     return null;
@@ -147,13 +193,14 @@ function isGoogleAuthUser(authUser) {
   );
 }
 
-function redirectAfterGoogleSignup(role) {
+function redirectAfterAuthSuccess() {
   if (typeof window === "undefined") return;
-  if (role === ROLES.farmer) {
-    window.location.replace("/pages/farmer-dashboard.html");
-    return;
-  }
-  window.location.replace("/");
+  const next = new URLSearchParams(window.location.search).get("next");
+  window.location.replace(next || "/index.html");
+}
+
+function isLoginPage() {
+  return typeof window !== "undefined" && /\/pages\/login\.html$/i.test(window.location.pathname);
 }
 
 function oauthParamsFromUrl() {
@@ -222,7 +269,11 @@ function avatarUrlFromAuthUser(authUser) {
 
 async function ensureProfileForAuthUser(authUser) {
   const existing = await fetchUserProfile(authUser.id);
-  if (existing) return { profile: existing, created: false };
+  // Trigger may create a stub row (no phone) before the signup page draft is applied.
+  if (existing?.phone) {
+    clearGoogleSignupDraft();
+    return { profile: existing, created: false };
+  }
 
   const draft = readGoogleSignupDraft();
   if (!draft?.role || !draft?.phone) {
@@ -239,9 +290,8 @@ async function ensureProfileForAuthUser(authUser) {
     return { profile: null, created: false, error: true };
   }
 
-  const roleR = validateRole(draft.role);
-  const phoneR = validatePhone(draft.phone);
-  if (!roleR.ok || !phoneR.ok) {
+  const draftR = validateGoogleSignupDraft(draft);
+  if (!draftR.ok) {
     emit("toast", {
       type: "error",
       message: t("service.fixHighlighted", { default: "Fix the highlighted fields." }),
@@ -254,11 +304,13 @@ async function ensureProfileForAuthUser(authUser) {
     return { profile: null, created: false, error: true };
   }
 
+  const { role, phone, farmName, companyName } = draftR.value;
+
   const supabase = getSupabase();
   const { data: existingPhone } = await supabase
     .from("users")
     .select("id")
-    .eq("phone", phoneR.value)
+    .eq("phone", phone)
     .maybeSingle();
   if (existingPhone) {
     emit("toast", {
@@ -277,55 +329,56 @@ async function ensureProfileForAuthUser(authUser) {
     id: authUser.id,
     email: authUser.email ?? "",
     name: displayNameFromAuthUser(authUser),
-    role: roleR.value,
-    phone: phoneR.value,
-    location: "",
+    role,
+    phone,
+    farm_name: farmName || null,
+    company_name: companyName || null,
     avatar_url: avatarUrlFromAuthUser(authUser),
-    created_at: now,
+    created_at: existing?.createdAt ?? now,
     updated_at: now,
   };
 
-  const inserted = await insertUserProfile(profileRow);
-  if (!inserted.ok) {
+  const saved = existing
+    ? await upsertUserProfile(profileRow)
+    : (await insertUserProfile(profileRow)).ok;
+  if (!saved) {
     emit("toast", {
       type: "error",
       message: t("service.profileSaveFailed", {
         default: "Account created but profile save failed. Try logging in.",
       }),
     });
+    await getSupabase().auth.signOut();
+    if (typeof window !== "undefined") {
+      window.location.replace("/pages/signup.html");
+    }
     return { profile: null, created: false, error: true };
-  }
-
-  if (inserted.duplicate) {
-    const profile = await fetchUserProfile(authUser.id);
-    clearGoogleSignupDraft();
-    return { profile, created: false };
   }
 
   clearGoogleSignupDraft();
 
-  if (roleR.value === ROLES.farmer) {
+  if (role === ROLES.farmer) {
     const { data: admins } = await supabase.from("users").select("id").eq("role", ROLES.admin);
     for (const admin of admins ?? []) {
       createNotification({
         userId: admin.id,
         type: "system",
         title: t("service.newFarmer", { default: "New farmer registered" }),
-        message: `New farmer registered: ${profileRow.name} (${profileRow.email ?? phoneR.value})`,
+        message: `New farmer registered: ${profileRow.name} (${profileRow.email ?? phone})`,
         metadata: {
           farmerId: authUser.id,
           farmerName: profileRow.name,
           farmerEmail: profileRow.email ?? null,
-          farmerPhone: phoneR.value,
+          farmerPhone: phone,
         },
       });
     }
   }
 
-  return { profile: userFromDb(profileRow), created: true, role: roleR.value };
+  return { profile: userFromDb(profileRow), created: true, role };
 }
 
-async function resolveAuthenticatedUser(session) {
+async function resolveAuthenticatedUser(session, { wasOAuthReturn = false } = {}) {
   const authUser = session?.user;
   if (!authUser?.id) {
     setCurrentUserInternal(null);
@@ -338,11 +391,6 @@ async function resolveAuthenticatedUser(session) {
       setCurrentUserInternal(null);
       return null;
     }
-    if (result.profile?.suspended) {
-      await getSupabase().auth.signOut();
-      setCurrentUserInternal(null);
-      return null;
-    }
     setCurrentUserInternal(result.profile);
     if (result.created) {
       emit("toast", {
@@ -352,7 +400,9 @@ async function resolveAuthenticatedUser(session) {
           default: `Welcome, ${result.profile.name}!`,
         }),
       });
-      redirectAfterGoogleSignup(result.role ?? result.profile.role);
+      redirectAfterAuthSuccess();
+    } else if (wasOAuthReturn && isLoginPage()) {
+      redirectAfterAuthSuccess();
     }
     return result.profile;
   }
@@ -369,8 +419,8 @@ async function resolveAuthenticatedUser(session) {
   return profile;
 }
 
-async function signInWithGoogleOAuth() {
-  const redirectTo = googleOAuthRedirectTo();
+async function signInWithGoogleOAuth(redirectPath = "/") {
+  const redirectTo = googleOAuthRedirectTo(redirectPath);
   if (!redirectTo) {
     return err(
       "AUTH_ERROR",
@@ -402,11 +452,11 @@ async function signInWithGoogleOAuth() {
 }
 
 export async function loginWithGoogle() {
-  return signInWithGoogleOAuth();
+  return signInWithGoogleOAuth("/pages/login.html");
 }
 
 export async function signupWithGoogle() {
-  return signInWithGoogleOAuth();
+  return signInWithGoogleOAuth("/pages/signup.html");
 }
 
 let authSessionReady = false;
@@ -425,7 +475,15 @@ export async function initAuthSession() {
       return;
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
+    let session = null;
+    const wasOAuthReturn = hasOAuthCallbackParams();
+    if (wasOAuthReturn) {
+      const oauthSession = await waitForOAuthSession(supabase);
+      session = oauthSession ?? (await supabase.auth.getSession()).data.session;
+    } else {
+      session = (await supabase.auth.getSession()).data.session;
+    }
+
     if (!session?.user?.id) {
       setCurrentUserInternal(null);
       cleanOAuthUrl();
@@ -433,7 +491,7 @@ export async function initAuthSession() {
       return;
     }
 
-    await resolveAuthenticatedUser(session);
+    await resolveAuthenticatedUser(session, { wasOAuthReturn });
     cleanOAuthUrl();
     authSessionReady = true;
     return;
@@ -505,7 +563,6 @@ export async function signup(input) {
     email: authEmail,
     role,
     name,
-    location: "",
     phone: phone || null,
     farm_name: farmName || null,
     company_name: companyName || null,
@@ -563,17 +620,11 @@ export async function login(input) {
       email: data.user.email,
       role: meta.role ?? ROLES.consumer,
       name: meta.name ?? String(email).split("@")[0],
-      location: "",
       created_at: now,
       updated_at: now,
     };
     await upsertUserProfile(row);
     profile = userFromDb(row);
-  }
-
-  if (profile.suspended) {
-    await supabase.auth.signOut();
-    return err("ACCOUNT_SUSPENDED", t("service.accountSuspended", { default: "Your account has been suspended. Please contact support." }));
   }
 
   setCurrentUserInternal(profile);
@@ -679,7 +730,8 @@ export function watchSession() {
       return;
     }
     if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
-      if (event === "INITIAL_SESSION" && authSessionReady) return;
+      // Skip duplicate INITIAL_SESSION only when initAuthSession already resolved a user.
+      if (event === "INITIAL_SESSION" && authSessionReady && currentUser) return;
       if (!nextSession?.user?.id) {
         setCurrentUserInternal(null);
         return;

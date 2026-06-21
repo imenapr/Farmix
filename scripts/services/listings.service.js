@@ -52,16 +52,22 @@ async function attachRatings(listings) {
 
 export async function getListingById(listingId) {
   const cacheKey = `${LISTINGS_CACHE_PREFIX}id:${listingId}`;
-  const cached = getCache(cacheKey);
-  if (cached) return ok(cached);
+  let listing = getCache(cacheKey);
 
-  const supabase = getSupabase();
-  const { data, error } = await supabase.from("listings").select("*").eq("id", listingId).maybeSingle();
-  if (error || !data) return err("NOT_FOUND", "Listing not found");
+  if (!listing) {
+    const supabase = getSupabase();
+    const { data, error } = await supabase.from("listings").select("*").eq("id", listingId).maybeSingle();
+    if (error || !data) return err("NOT_FOUND", "Listing not found");
+    listing = listingFromDb(data);
+  }
 
-  let listing = listingFromDb(data);
-  [listing] = await attachSellerNames([listing]);
-  [listing] = await attachRatings([listing]);
+  if (!listing.sellerName) {
+    [listing] = await attachSellerNames([listing]);
+  }
+  if (!listing.ratings) {
+    [listing] = await attachRatings([listing]);
+  }
+
   setCache(cacheKey, listing, LISTING_TTL);
   return ok(listing);
 }

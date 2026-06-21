@@ -49,3 +49,35 @@
     padding-bottom: 1rem;
   }
 }
+
+.account-avatar-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.35rem;
+}
+
+.account-avatar-preview {
+  line-height: 0;
+}
+
+.account-avatar-change {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--color-primary-600);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: color var(--dur-2) var(--ease-out);
+}
+
+.account-avatar-change:hover {
+  color: var(--color-primary-800);
+}
+
+.account-avatar-change:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}

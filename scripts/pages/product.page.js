@@ -1,6 +1,7 @@
 import { boot } from "../app/boot.js";
-import { getCurrentUser } from "../app/auth-state.js";
+import { initAppState, getCurrentUser } from "../app/auth-state.js";
 import { ROLES } from "../app/config.js";
+import { on } from "../app/events.js";
 import { getListingById } from "../app/state.js";
 import {
   escapeHtml,
@@ -21,6 +22,7 @@ import { openGuestGate } from "../components/guest-gate.js";
 import { t, onLanguageChange, translatePageHead, getCategoryLabel, getCurrentLang } from "../app/i18n.js";
 import { getCategoryById } from "../data/categories.js";
 import { formatListingLocation } from "../data/locations.js";
+import { renderAvailabilityBadge } from "../components/listing-card.js";
 
 boot();
 translatePageHead("product.pageTitle");
@@ -350,6 +352,15 @@ function ensureOrderModal() {
   return orderModalEl;
 }
 
+function isListingOwner(user, targetListing) {
+  if (!user?.id || !targetListing?.sellerId) return false;
+  return String(user.id) === String(targetListing.sellerId);
+}
+
+function isListingAdmin(user) {
+  return user?.role === ROLES.admin;
+}
+
 function canShowOrderCta(user, isOwner, isAdmin) {
   if (isOwner || isAdmin) return false;
   if (user?.role === ROLES.farmer || user?.role === ROLES.admin) return false;
@@ -403,7 +414,7 @@ async function loadListing() {
 
   listing = listingRes.data;
   userReview = null;
-  if (user && user.id !== listing.sellerId && reviewRes.ok) {
+  if (user && !isListingOwner(user, listing) && reviewRes.ok) {
     userReview = reviewRes.data;
   }
 
@@ -433,8 +444,8 @@ function renderPage() {
   if (!listing || !listingId) return;
 
   const user = getCurrentUser();
-  const isOwner = user && user.id === listing.sellerId;
-  const isAdmin = user && user.role === "admin";
+  const isOwner = isListingOwner(user, listing);
+  const isAdmin = isListingAdmin(user);
   const canManage = isOwner || isAdmin;
   const showOrderCta = canShowOrderCta(user, isOwner, isAdmin) && listing.status === "active";
   const orderQty = Number(listing.quantityAvailable ?? 0);
@@ -475,7 +486,7 @@ function renderPage() {
           <div class="listing-meta" style="margin-top:0.6rem;">
             <span class="pill">${escapeHtml(getCategoryLabel(listing.categoryId, getCategoryById(listing.categoryId)?.name))}</span>
             <span class="pill">${escapeHtml(formatListingLocation(listing.regionId, listing.village, getCurrentLang()))}</span>
-            <span class="pill">${escapeHtml(String(listing.quantityAvailable))} ${t("product.available")}</span>
+            ${renderAvailabilityBadge(listing.quantityAvailable)}
             <span class="pill" style="color: #666;">${listing.status === "active" ? t("product.status.available") : listing.status === "sold" ? t("product.status.sold") : t("product.status.archived")}</span>
           </div>
 
@@ -673,12 +684,18 @@ function renderPage() {
   const deleteBtn = root.querySelector("[data-delete]");
   if (deleteBtn && canManage) {
     deleteBtn.addEventListener("click", async () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        openGuestGate();
+        return;
+      }
+
       if (!confirm(t("product.deleteConfirm"))) return;
 
       deleteBtn.disabled = true;
       deleteBtn.textContent = t("product.deleting");
 
-      const delRes = await archiveListingAsOwnerOrAdmin(listingId, user.id, user.role);
+      const delRes = await archiveListingAsOwnerOrAdmin(listingId, currentUser.id, currentUser.role);
       if (!delRes.ok) {
         deleteBtn.disabled = false;
         deleteBtn.textContent = t("product.delete");
@@ -694,9 +711,9 @@ function renderPage() {
   const revealBtn = root.querySelector("[data-reveal-phone]");
   if (revealBtn) {
     revealBtn.addEventListener("click", async () => {
-      if (!user) {
-        const next = encodeURIComponent(location.pathname + location.search);
-        location.href = `/pages/login.html?next=${next}`;
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        openGuestGate();
         return;
       }
 
@@ -717,58 +734,64 @@ function renderPage() {
   }
 
   const reviewForm = root.querySelector("#review-form");
-  if (reviewForm && user && !isOwner && !userReview) {
-    wireStarPickers(reviewForm);
-    const reviewSubmit = qs(reviewForm, "[data-review-submit]");
-    const reviewError = qs(reviewForm, "#review-error");
+  if (reviewForm) {
+    const currentUser = getCurrentUser();
+    if (currentUser && !isListingOwner(currentUser, listing) && !userReview) {
+      wireStarPickers(reviewForm);
+      const reviewSubmit = qs(reviewForm, "[data-review-submit]");
+      const reviewError = qs(reviewForm, "#review-error");
 
-    function clearReviewErrors() {
-      reviewError.style.display = "none";
-      reviewError.textContent = "";
-      for (const key of ["deliveryRating", "qualityRating"]) {
-        const el = reviewForm.querySelector(`[data-err='${key}']`);
-        if (el) el.textContent = "";
-      }
-    }
-
-    reviewForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      clearReviewErrors();
-      reviewSubmit.disabled = true;
-      reviewSubmit.textContent = t("product.submittingReview");
-
-      const fd = new FormData(reviewForm);
-      const res = await submitListingReview(
-        {
-          listingId,
-          deliveryRating: fd.get("deliveryRating"),
-          qualityRating: fd.get("qualityRating"),
-        },
-        user.id,
-      );
-
-      if (!res.ok) {
-        reviewSubmit.disabled = false;
-        reviewSubmit.textContent = t("product.submitReview");
-        for (const [key, msg] of Object.entries(res.error.fieldErrors ?? {})) {
+      function clearReviewErrors() {
+        reviewError.style.display = "none";
+        reviewError.textContent = "";
+        for (const key of ["deliveryRating", "qualityRating"]) {
           const el = reviewForm.querySelector(`[data-err='${key}']`);
-          if (el) el.textContent = msg;
+          if (el) el.textContent = "";
         }
-        reviewError.textContent = res.error.message ?? t("product.reviewFailed");
-        reviewError.style.display = "block";
-        return;
       }
 
-      toast("success", t("product.reviewSubmitted"));
-      userReview = res.data;
-      const refreshed = await getListingById(listingId);
-      if (refreshed.ok) listing = refreshed.data;
-      renderPage();
-    });
+      reviewForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        clearReviewErrors();
+        reviewSubmit.disabled = true;
+        reviewSubmit.textContent = t("product.submittingReview");
+
+        const fd = new FormData(reviewForm);
+        const res = await submitListingReview(
+          {
+            listingId,
+            deliveryRating: fd.get("deliveryRating"),
+            qualityRating: fd.get("qualityRating"),
+          },
+          currentUser.id,
+        );
+
+        if (!res.ok) {
+          reviewSubmit.disabled = false;
+          reviewSubmit.textContent = t("product.submitReview");
+          for (const [key, msg] of Object.entries(res.error.fieldErrors ?? {})) {
+            const el = reviewForm.querySelector(`[data-err='${key}']`);
+            if (el) el.textContent = msg;
+          }
+          reviewError.textContent = res.error.message ?? t("product.reviewFailed");
+          reviewError.style.display = "block";
+          return;
+        }
+
+        toast("success", t("product.reviewSubmitted"));
+        userReview = res.data;
+        const refreshed = await getListingById(listingId);
+        if (refreshed.ok) listing = refreshed.data;
+        renderPage();
+      });
+    }
   }
 
   const form = root.querySelector("#inquiry-form");
   if (form) {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return;
+
     const bodyInput = form.elements.namedItem("body");
     if (bodyInput && inquiryDraft) bodyInput.value = inquiryDraft;
 
@@ -794,7 +817,7 @@ function renderPage() {
       setLoading(true);
 
       const fd = new FormData(form);
-      const r = await createInquiry(user.id, listing.id, {
+      const r = await createInquiry(currentUser.id, listing.id, {
         body: fd.get("body"),
       });
 
@@ -817,7 +840,28 @@ function renderPage() {
   }
 }
 
-loadListing();
+async function refreshAuthDependentState() {
+  if (!listing || !listingId) return;
+  const user = getCurrentUser();
+  userReview = null;
+  if (user && !isListingOwner(user, listing)) {
+    const reviewRes = await getUserReviewForListing(listingId, user.id);
+    if (reviewRes.ok) userReview = reviewRes.data;
+  }
+  renderPage();
+}
+
+async function initProductPage() {
+  await initAppState();
+  await loadListing();
+}
+
+initProductPage();
+
+on("auth:changed", () => {
+  refreshAuthDependentState();
+});
+
 onLanguageChange(() => {
   translatePageHead("product.pageTitle");
   syncReportModalCopy();

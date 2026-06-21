@@ -3,7 +3,7 @@ import { signup, signupWithGoogle } from "../app/auth-state.js";
 import { STORAGE_KEYS } from "../app/config.js";
 import { toast, qs, setText } from "../app/ui.js";
 import { t, onLanguageChange } from "../app/i18n.js";
-import { wirePasswordRuleFeedback, wirePasswordConfirmFeedback, validateRole, validatePhone } from "../data/validators.js";
+import { wirePasswordRuleFeedback, wirePasswordConfirmFeedback, validateGoogleSignupDraft } from "../data/validators.js";
 import { mountPasswordToggles, renderPasswordToggleButton } from "../components/password-toggle.js";
 import { renderGoogleAuthButton, renderAuthDivider } from "../components/google-auth-button.js";
 
@@ -15,7 +15,7 @@ if (!root) throw new Error("Missing #signup-root");
 let savedSignupState = null;
 let googleModalHost = null;
 let googleModalWired = false;
-let googleModalState = { role: "", phone: "", open: false };
+let googleModalState = { role: "", phone: "", farmName: "", companyName: "", open: false };
 
 function optionalFieldLabel(forId, labelKey) {
   return `
@@ -66,23 +66,62 @@ function captureGoogleModalState() {
   if (!googleModalHost) return;
   const roleInput = googleModalHost.querySelector("#google-role-hidden");
   const phoneInput = googleModalHost.querySelector("#google-phone");
+  const farmInput = googleModalHost.querySelector("#google-farmName");
+  const companyInput = googleModalHost.querySelector("#google-companyName");
   googleModalState = {
     ...googleModalState,
     role: roleInput?.value || "",
     phone: phoneInput?.value || "",
+    farmName: farmInput?.value || "",
+    companyName: companyInput?.value || "",
   };
+}
+
+function syncGoogleModalConditionalFields(role) {
+  if (!googleModalHost) return;
+  const farmWrap = googleModalHost.querySelector("[data-cond='farmName']");
+  const compWrap = googleModalHost.querySelector("[data-cond='companyName']");
+  const farmInput = googleModalHost.querySelector("#google-farmName");
+  const compInput = googleModalHost.querySelector("#google-companyName");
+  const isFarmer = role === "farmer";
+  const isBusiness = role === "business";
+  farmWrap?.classList.toggle("visible", isFarmer);
+  compWrap?.classList.toggle("visible", isBusiness);
+  if (!isFarmer && farmInput) farmInput.value = "";
+  if (!isBusiness && compInput) compInput.value = "";
+}
+
+function clearGoogleModalErrors() {
+  if (!googleModalHost) return;
+  for (const key of ["farmName", "companyName", "phone"]) {
+    const el = googleModalHost.querySelector(`[data-err='${key}']`);
+    if (el) setText(el, "");
+  }
+}
+
+function setGoogleModalFieldErrors(fieldErrors) {
+  if (!googleModalHost) return;
+  for (const [key, msg] of Object.entries(fieldErrors)) {
+    const el = googleModalHost.querySelector(`[data-err='${key}']`);
+    if (el) setText(el, msg);
+  }
 }
 
 function restoreGoogleModalState() {
   if (!googleModalHost) return;
   const roleInput = googleModalHost.querySelector("#google-role-hidden");
   const phoneInput = googleModalHost.querySelector("#google-phone");
+  const farmInput = googleModalHost.querySelector("#google-farmName");
+  const companyInput = googleModalHost.querySelector("#google-companyName");
   if (phoneInput && googleModalState.phone) phoneInput.value = googleModalState.phone;
+  if (farmInput && googleModalState.farmName) farmInput.value = googleModalState.farmName;
+  if (companyInput && googleModalState.companyName) companyInput.value = googleModalState.companyName;
   if (roleInput && googleModalState.role) {
     roleInput.value = googleModalState.role;
     googleModalHost.querySelectorAll(".role-card[data-role]").forEach((card) => {
       card.classList.toggle("selected", card.dataset.role === googleModalState.role);
     });
+    syncGoogleModalConditionalFields(googleModalState.role);
   }
 }
 
@@ -155,10 +194,29 @@ function renderGoogleSignupModal() {
       </div>
       <input type="hidden" id="google-role-hidden" value="" />
 
+      <div class="conditional-field" data-cond="farmName">
+        <div class="form-field">
+          ${optionalFieldLabel("google-farmName", "auth.signup.farmName")}
+          <input class="input" id="google-farmName" name="farmName" type="text"
+                 placeholder="${t("auth.signup.farmNamePlaceholder")}" />
+          <span class="form-error" data-err="farmName"></span>
+        </div>
+      </div>
+
+      <div class="conditional-field" data-cond="companyName">
+        <div class="form-field">
+          <label class="form-label" for="google-companyName">${t("auth.signup.companyName")}</label>
+          <input class="input" id="google-companyName" name="companyName" type="text"
+                 placeholder="${t("auth.signup.companyNamePlaceholder")}" />
+          <span class="form-error" data-err="companyName"></span>
+        </div>
+      </div>
+
       <div class="form-field">
         <label class="form-label" for="google-phone">${t("auth.signup.phone")}</label>
         <input class="input" id="google-phone" name="phone" type="tel" autocomplete="tel"
                inputmode="tel" placeholder="${t("auth.signup.phonePlaceholder")}" />
+        <span class="form-error" data-err="phone"></span>
       </div>
 
       <div class="google-signup-actions">
@@ -180,6 +238,8 @@ function renderGoogleSignupModal() {
       card.classList.add("selected");
       roleInput.value = card.dataset.role;
       googleModalState.role = card.dataset.role;
+      syncGoogleModalConditionalFields(card.dataset.role);
+      clearGoogleModalErrors();
     });
   });
 
@@ -187,32 +247,29 @@ function renderGoogleSignupModal() {
   cancelBtn?.addEventListener("click", closeGoogleSignupModal);
 
   continueBtn?.addEventListener("click", async () => {
+    clearGoogleModalErrors();
+
     const role = roleInput?.value || "";
     const phone = phoneInput?.value || "";
+    const farmName = googleModalHost.querySelector("#google-farmName")?.value || "";
+    const companyName = googleModalHost.querySelector("#google-companyName")?.value || "";
 
-    const roleR = validateRole(role);
-    if (!roleR.ok) {
-      toast("error", Object.values(roleR.fieldErrors)[0] ?? t("service.roleInvalid"));
-      return;
-    }
-
-    const phoneR = validatePhone(phone);
-    if (!phoneR.ok) {
-      toast("error", Object.values(phoneR.fieldErrors)[0] ?? t("validation.phoneRequired"));
+    const v = validateGoogleSignupDraft({ role, phone, farmName, companyName });
+    if (!v.ok) {
+      setGoogleModalFieldErrors(v.fieldErrors);
+      const first = Object.values(v.fieldErrors)[0];
+      if (first) toast("error", first);
       return;
     }
 
     try {
-      sessionStorage.setItem(
-        STORAGE_KEYS.googleSignup,
-        JSON.stringify({ role: roleR.value, phone: phoneR.value }),
-      );
+      sessionStorage.setItem(STORAGE_KEYS.googleSignup, JSON.stringify(v.value));
     } catch {
       toast("error", t("auth.google.failed"));
       return;
     }
 
-    googleModalState = { role: roleR.value, phone: phoneR.value, open: true };
+    googleModalState = { ...v.value, open: true };
     setGoogleModalLoading(true);
     const res = await signupWithGoogle();
     if (!res.ok) {

@@ -16,7 +16,7 @@
   --color-primary-800: #0f4a37;
   --color-primary-700: #146a4b;
   --color-primary-600: #1b8a61;
-  --color-primary-500: #27a874;
+  --color-primary-500: #27a87400;
   --color-primary-400: #4ec995;
   --color-primary-300: #86e5bc;
   --color-accent-500: #2f3f3a;
@@ -115,7 +115,7 @@
 
   --color-primary-900: #86e5bc;
   --color-primary-800: #6fdab1;
-  --color-primary-700: #4ec995;
+  --color-primary-700: #ffffff89;
   --color-primary-600: #27a874;
 
   /* Shadows lightened for dark surfaces */

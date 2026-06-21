@@ -45,6 +45,14 @@ const PIN_SVG = `<svg width="11" height="13" viewBox="0 0 24 28" fill="currentCo
   <path d="M12 0C7.58 0 4 3.58 4 8c0 6 8 16 8 16s8-10 8-16c0-4.42-3.58-8-8-8zm0 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/>
 </svg>`;
 
+export function renderAvailabilityBadge(qty) {
+  const n = Number.isFinite(Number(qty)) ? Number(qty) : 0;
+  if (n > 0) {
+    return `<span class="listing-avail">${escapeHtml(t("listing.availableShort", { n }))}</span>`;
+  }
+  return `<span class="listing-avail listing-avail--unavailable">${escapeHtml(t("listing.notAvailable"))}</span>`;
+}
+
 export function renderListingCard(
   listing,
   { compact = false, maskLocation = false, currency = CURRENCIES.GEL } = {},
@@ -98,7 +106,7 @@ export function renderListingCard(
               ${PIN_SVG}
               ${escapeHtml(locationText)}
             </span>
-            ${qty > 0 ? `<span class="listing-avail">${escapeHtml(t("listing.availableShort", { n: qty }))}</span>` : ""}
+            ${renderAvailabilityBadge(qty)}
           </div>
         </div>
 

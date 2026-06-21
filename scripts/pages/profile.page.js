@@ -3,6 +3,7 @@ import { escapeHtml, renderSkeletonCards, renderStateBlock, qs, mountListingCard
 import { getUserById } from "../services/users.service.js";
 import { getUserListings } from "../app/state.js";
 import { renderListingCard } from "../components/listing-card.js";
+import { renderUserAvatar, wireUserAvatarFallbacks } from "../components/user-avatar.js";
 import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
 
 boot();
@@ -49,13 +50,20 @@ function renderProfile() {
   const user = profileUser;
 
   head.innerHTML = `
-    <div class="pill">${escapeHtml(user.role)}</div>
-    <h2 style="margin:0.5rem 0 0; letter-spacing:-0.01em;">${escapeHtml(user.name)}</h2>
-    ${user.farmName ? `<div class="muted">${t("profile.farm")}: <strong>${escapeHtml(user.farmName)}</strong></div>` : ""}
+    <div style="display:flex; gap:1rem; align-items:center; flex-wrap:wrap;">
+      ${renderUserAvatar(user, { size: "md" })}
+      <div>
+        <div class="pill">${escapeHtml(user.role)}</div>
+        <h2 style="margin:0.5rem 0 0; letter-spacing:-0.01em;">${escapeHtml(user.name)}</h2>
+      </div>
+    </div>
+    ${user.farmName ? `<div class="muted" style="margin-top:0.75rem;">${t("profile.farm")}: <strong>${escapeHtml(user.farmName)}</strong></div>` : ""}
     ${user.companyName ? `<div class="muted">${t("profile.business")}: <strong>${escapeHtml(user.companyName)}</strong></div>` : ""}
     ${user.phone ? `<div class="muted">${t("common.phone")}: <strong>${escapeHtml(user.phone)}</strong></div>` : ""}
     ${user.bio ? `<p class="muted" style="margin:0.6rem 0 0; white-space:pre-wrap;">${escapeHtml(user.bio)}</p>` : ""}
   `;
+
+  wireUserAvatarFallbacks(head);
 
   if (loadError) {
     listingsMount.innerHTML = renderStateBlock({
