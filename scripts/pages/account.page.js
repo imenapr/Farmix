@@ -55,11 +55,6 @@ function renderAccountForm() {
             <input class="input" name="name" required />
             <span class="error-text" data-err="name"></span>
           </label>
-          <label class="stack" style="gap:0.35rem;">
-            <span style="font-weight: 700;">${t("common.location")}</span>
-            <input class="input" name="location" required />
-            <span class="error-text" data-err="location"></span>
-          </label>
         </div>
 
         <div class="grid" style="grid-template-columns: 1fr; gap: 0.85rem;">
@@ -118,7 +113,6 @@ function renderAccountForm() {
   };
 
   setVal("name", record.name);
-  setVal("location", record.location);
   setVal("phone", record.phone);
   setVal("bio", record.bio);
   setVal("farmName", record.farmName);
@@ -129,7 +123,7 @@ function renderAccountForm() {
   const errForm = err("form");
 
   function clearErrors() {
-    for (const k of ["name", "location", "phone", "bio", "farmName", "companyName", "form"]) setText(err(k), "");
+    for (const k of ["name", "phone", "bio", "farmName", "companyName", "form"]) setText(err(k), "");
   }
 
   function setLoading(isLoading) {
@@ -145,7 +139,6 @@ function renderAccountForm() {
     const fd = new FormData(form);
     const res = await updateProfile(accountUser.id, {
       name: fd.get("name"),
-      location: fd.get("location"),
       phone: fd.get("phone"),
       bio: fd.get("bio"),
       farmName: fd.get("farmName"),

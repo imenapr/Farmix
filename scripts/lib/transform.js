@@ -70,7 +70,8 @@ export function listingFromDb(row) {
     price: Number(l.price),
     unit: l.unit ?? "other",
     quantityAvailable: Number(l.quantityAvailable ?? l.quantity ?? 0),
-    location: l.location ?? "",
+    regionId: l.regionId ?? l.region_id ?? "other",
+    village: l.village ?? undefined,
     images,
     status: l.status,
     views: Number(l.viewCount ?? l.views ?? 0),
@@ -78,7 +79,6 @@ export function listingFromDb(row) {
     createdAt: l.createdAt,
     updatedAt: l.updatedAt,
     sellerName: l.sellerName ?? undefined,
-    sellerLocation: l.sellerLocation ?? undefined,
   };
 }
 
@@ -91,7 +91,8 @@ export function listingToDb(input) {
     price: input.price,
     unit: input.unit,
     quantity_available: input.quantityAvailable,
-    location: input.location,
+    region_id: input.regionId,
+    village: input.village ?? null,
     images: input.images ?? [],
     updated_at: new Date().toISOString(),
   };

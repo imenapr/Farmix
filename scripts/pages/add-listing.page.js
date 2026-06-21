@@ -3,8 +3,9 @@ import { qs, toast } from "../app/ui.js";
 import { initAppState, getCurrentUser } from "../app/auth-state.js";
 import { ROLES } from "../app/config.js";
 import { createListing } from "../services/listings.service.js";
-import { t, onLanguageChange, translatePageHead, getCategoryLabel } from "../app/i18n.js";
+import { t, onLanguageChange, translatePageHead, getCategoryLabel, getCurrentLang } from "../app/i18n.js";
 import { getCategories } from "../data/categories.js";
+import { renderRegionOptionsHtml } from "../data/locations.js";
 import { CURRENCIES, getCurrencySymbol, priceToStorageGEL } from "../lib/currency.js";
 import { compressImageToDataUrl } from "../lib/image-utils.js";
 
@@ -137,9 +138,21 @@ function mountPage() {
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="location">${t("common.location")}</label>
-            <input class="input" id="location" name="location" placeholder="${t("listingForm.locationPlaceholder")}" />
-            <span class="form-error" data-err="location"></span>
+            <label class="form-label" for="regionId">${t("location.region")}</label>
+            <select class="input" id="regionId" name="regionId" required>
+              <option value="">${t("listingForm.selectRegion")}</option>
+              ${renderRegionOptionsHtml({ lang: getCurrentLang() })}
+            </select>
+            <span class="form-error" data-err="regionId"></span>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label form-label-row" for="village">
+              <span>${t("location.village")}</span>
+              <span class="form-label-optional">(${t("common.optional")})</span>
+            </label>
+            <input class="input" id="village" name="village" placeholder="${t("listingForm.villagePlaceholder")}" />
+            <span class="form-error" data-err="village"></span>
           </div>
 
           <div class="form-field">
@@ -260,7 +273,7 @@ function wireImagePicker(form) {
 function wireForm(form) {
   const submitBtn = qs(root, "[data-submit]");
   const formError = qs(root, "#form-error");
-  const fieldKeys = ["title", "categoryId", "price", "unit", "quantityAvailable", "location", "description", "images", "imageUrls"];
+  const fieldKeys = ["title", "categoryId", "price", "unit", "quantityAvailable", "regionId", "village", "description", "images", "imageUrls"];
 
   function clearErrors() {
     formError.style.display = "none";
@@ -316,7 +329,8 @@ function wireForm(form) {
           price: priceGel,
           unit: fd.get("unit"),
           quantityAvailable: fd.get("quantityAvailable"),
-          location: fd.get("location"),
+          regionId: fd.get("regionId"),
+          village: fd.get("village"),
           description: fd.get("description"),
           images,
         },

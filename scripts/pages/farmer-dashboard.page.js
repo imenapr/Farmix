@@ -316,7 +316,6 @@ function renderProfileSection() {
         <h2 class="fd-section-title">${t("farmer.profile")}</h2>
         <p class="fd-profile-line"><strong>${escapeHtml(user.name ?? t("nav.role.farmer"))}</strong></p>
         <p class="fd-profile-line">${escapeHtml(user.email ?? "")}</p>
-        <p class="fd-profile-line">${escapeHtml(user.location ?? "")}</p>
         <div class="fd-profile-actions">
           <a class="btn btn-primary" href="/pages/account.html">${t("farmer.editProfile")}</a>
           <a class="btn btn-ghost" href="/pages/add-listing.html">${t("nav.link.addListing")}</a>

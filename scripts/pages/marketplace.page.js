@@ -3,12 +3,13 @@ import { debounce, renderSkeletonCards, renderStateBlock, toast, qs, mountListin
 import { getCurrentUser } from "../app/auth-state.js";
 import { searchListings } from "../app/state.js";
 import { getCategories } from "../data/categories.js";
+import { REGIONS, getRegionLabel } from "../data/locations.js";
 import { ROLES } from "../app/config.js";
 import { validateMarketplaceFilters } from "../data/validators.js";
 import { renderListingCard } from "../components/listing-card.js";
 import { placeOrder } from "../services/orders.service.js";
 import { openGuestGate } from "../components/guest-gate.js";
-import { t, onLanguageChange, translatePageHead, getCategoryLabel } from "../app/i18n.js";
+import { t, onLanguageChange, translatePageHead, getCategoryLabel, getCurrentLang } from "../app/i18n.js";
 import {
   CURRENCIES,
   formatPrice,
@@ -28,6 +29,7 @@ const filtersPanel = qs(root, "#market-filters-panel");
 const filtersToggle = qs(root, "[data-filters-toggle]");
 const filtersToggleLabel = qs(root, "[data-filters-toggle-label]");
 const catSelect = qs(form, "select[name='cat']");
+const regionSelect = qs(form, "select[name='region']");
 const resultsEl = qs(root, "[data-results]");
 const countEl = qs(root, "[data-count]");
 const pageEl = qs(root, "[data-page]");
@@ -54,6 +56,21 @@ for (const c of CATEGORIES) {
   opt.textContent = getCategoryLabel(c.id, c.name);
   catSelect.appendChild(opt);
 }
+
+function populateRegionFilterOptions() {
+  if (!regionSelect) return;
+  const selected = regionSelect.value;
+  regionSelect.innerHTML = `<option value="">${t("location.allRegions")}</option>`;
+  for (const region of REGIONS) {
+    const opt = document.createElement("option");
+    opt.value = region.id;
+    opt.textContent = getRegionLabel(region.id, getCurrentLang());
+    regionSelect.appendChild(opt);
+  }
+  if (selected) regionSelect.value = selected;
+}
+
+populateRegionFilterOptions();
 
 const user = getCurrentUser();
 if (user && user.role === "admin") {
@@ -236,7 +253,7 @@ function renderResultsBlock({ items, total, page, pageSize, filters }) {
     currentParams: {
       q: filters.q,
       cat: filters.cat,
-      loc: filters.loc,
+      region: filters.region,
       min: filters.min,
       max: filters.max,
       sort: filters.sort,
@@ -264,7 +281,7 @@ function translateFilterLabels() {
   const labelTexts = [
     t("marketplace.search"),
     t("common.category"),
-    t("common.location"),
+    t("location.region"),
     t("marketplace.minPrice"),
     t("marketplace.maxPrice"),
     t("marketplace.sort"),
@@ -275,8 +292,8 @@ function translateFilterLabels() {
 
   const qInputEl = form.elements.namedItem("q");
   if (qInputEl) qInputEl.placeholder = t("marketplace.searchPlaceholder");
-  const locInputEl = form.elements.namedItem("loc");
-  if (locInputEl) locInputEl.placeholder = t("marketplace.locationPlaceholder");
+  const regionSelectEl = form.elements.namedItem("region");
+  if (regionSelectEl) populateRegionFilterOptions();
 
   const hint = form.querySelector(".filters-hint");
   if (hint) hint.textContent = t("marketplace.searchHint");
@@ -325,7 +342,7 @@ function setQueryParams(next) {
   }
 
   for (const k of [...params.keys()]) {
-    if (!["q", "cat", "loc", "min", "max", "sort", "stock", "page"].includes(k)) params.delete(k);
+    if (!["q", "cat", "region", "min", "max", "sort", "stock", "page"].includes(k)) params.delete(k);
     if (params.get(k) === "") params.delete(k);
   }
 
@@ -342,7 +359,8 @@ function readFiltersFromUrl() {
 function syncForm(filters) {
   form.elements.namedItem("q").value = filters.q ?? "";
   form.elements.namedItem("cat").value = filters.cat ?? "";
-  form.elements.namedItem("loc").value = filters.loc ?? "";
+  const regionEl = form.elements.namedItem("region");
+  if (regionEl) regionEl.value = filters.region ?? "";
   form.elements.namedItem("min").value = filters.min ?? "";
   form.elements.namedItem("max").value = filters.max ?? "";
   form.elements.namedItem("sort").value = filters.sort ?? "newest";
@@ -561,7 +579,7 @@ function applyFiltersFromForm() {
   setQueryParams({
     q: fd.get("q"),
     cat: fd.get("cat"),
-    loc: fd.get("loc"),
+    region: fd.get("region"),
     min: fd.get("min"),
     max: fd.get("max"),
     sort: fd.get("sort"),
@@ -591,6 +609,7 @@ render();
 onLanguageChange(() => {
   translatePageHead("marketplace.pageTitle", "marketplace.pageSubtitle");
   translateFilterLabels();
+  populateRegionFilterOptions();
   translateOrderModal();
   updateCurrencyToggleUI();
   const isOpen = filtersPanel?.classList.contains("is-open");

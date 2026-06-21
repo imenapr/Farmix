@@ -1,5 +1,6 @@
 import { ROLES } from "../app/config.js";
 import { CATEGORIES } from "./categories-data.js";
+import { LISTING_REGION_IDS, REGION_IDS } from "./locations.js";
 import { t } from "../app/i18n.js";
 
 const ALLOWED_CATEGORY_IDS = new Set(CATEGORIES.map((c) => c.id));
@@ -119,10 +120,25 @@ export function validateName(name) {
   return ok(value);
 }
 
-export function validateLocation(location) {
-  const value = String(location ?? "").trim();
-  if (value.length < 2) return fail({ location: "Location must be at least 2 characters." });
-  if (value.length > 80) return fail({ location: "Location is too long." });
+export function validateRegionId(regionId, { forListing = false } = {}) {
+  const value = String(regionId ?? "").trim();
+  const allowed = forListing ? LISTING_REGION_IDS : REGION_IDS;
+  if (!value || !allowed.has(value)) {
+    return fail({
+      regionId: t("validation.regionRequired", { default: "Select a region." }),
+    });
+  }
+  return ok(value);
+}
+
+export function validateListingVillage(village) {
+  const value = String(village ?? "").trim();
+  if (!value) return ok(undefined);
+  if (value.length > 80) {
+    return fail({
+      village: t("validation.villageTooLong", { default: "Village name is too long." }),
+    });
+  }
   return ok(value);
 }
 
@@ -163,9 +179,6 @@ export function validateSignup(input) {
   const nameR = validateName(input?.name);
   if (!nameR.ok) Object.assign(fieldErrors, nameR.fieldErrors);
 
-  const locR = validateLocation(input?.location);
-  if (!locR.ok) Object.assign(fieldErrors, locR.fieldErrors);
-
   const phoneR = validatePhone(input?.phone);
   if (!phoneR.ok) Object.assign(fieldErrors, phoneR.fieldErrors);
 
@@ -195,45 +208,6 @@ export function validateSignup(input) {
     password: passR.value,
     role: roleR.value,
     name: nameR.value,
-    location: locR.value,
-    phone: phoneR.value,
-    farmName: farmName || undefined,
-    companyName: companyName || undefined,
-  });
-}
-
-export function validateCompleteProfile(input) {
-  const fieldErrors = {};
-
-  const roleR = validateRole(input?.role);
-  if (!roleR.ok) Object.assign(fieldErrors, roleR.fieldErrors);
-
-  const phoneR = validatePhone(input?.phone);
-  if (!phoneR.ok) Object.assign(fieldErrors, phoneR.fieldErrors);
-
-  const farmName = String(input?.farmName ?? "").trim();
-  const companyName = String(input?.companyName ?? "").trim();
-
-  if (roleR.ok && roleR.value === ROLES.farmer) {
-    if (farmName.length > 60) fieldErrors.farmName = "Farm name is too long.";
-    if (companyName) fieldErrors.companyName = "Business company name is not allowed for farmer role.";
-  }
-
-  if (roleR.ok && roleR.value === ROLES.business) {
-    if (!companyName) fieldErrors.companyName = "Company name is required for business accounts.";
-    if (companyName.length > 60) fieldErrors.companyName = "Company name is too long.";
-    if (farmName) fieldErrors.farmName = "Farm name is not allowed for business role.";
-  }
-
-  if (roleR.ok && roleR.value === ROLES.consumer) {
-    if (farmName) fieldErrors.farmName = "Consumers cannot set a farm name.";
-    if (companyName) fieldErrors.companyName = "Consumers cannot set a company name.";
-  }
-
-  if (Object.keys(fieldErrors).length) return fail(fieldErrors);
-
-  return ok({
-    role: roleR.value,
     phone: phoneR.value,
     farmName: farmName || undefined,
     companyName: companyName || undefined,
@@ -322,7 +296,8 @@ export function validateLogin(input) {
 export function validateMarketplaceFilters(params) {
   const q = String(params.get("q") ?? "").trim();
   const cat = String(params.get("cat") ?? "").trim() || null;
-  const loc = String(params.get("loc") ?? "").trim() || null;
+  const regionRaw = String(params.get("region") ?? params.get("loc") ?? "").trim();
+  const region = regionRaw && REGION_IDS.has(regionRaw) ? regionRaw : null;
 
   const minRaw = params.get("min");
   const maxRaw = params.get("max");
@@ -354,7 +329,7 @@ export function validateMarketplaceFilters(params) {
     cat,
     min: safeMin,
     max: safeMax,
-    loc,
+    region,
     sort,
     inStockOnly,
     page: clampNumber(page, { min: 1, max: 999 }),
@@ -387,9 +362,6 @@ export function validateProfileUpdate(input) {
   const nameR = validateName(input?.name);
   if (!nameR.ok) Object.assign(fieldErrors, nameR.fieldErrors);
 
-  const locR = validateLocation(input?.location);
-  if (!locR.ok) Object.assign(fieldErrors, locR.fieldErrors);
-
   const bio = String(input?.bio ?? "").trim();
   if (bio.length > 240) fieldErrors.bio = "Bio is too long (max 240 chars).";
 
@@ -406,7 +378,6 @@ export function validateProfileUpdate(input) {
 
   return ok({
     name: nameR.value,
-    location: locR.value,
     bio: bio || undefined,
     phone: phone || undefined,
     companyName: companyName || undefined,
@@ -439,8 +410,11 @@ export function validateListingInput(input) {
   const qtyNum = Number(String(input?.quantityAvailable ?? "").trim());
   if (!Number.isFinite(qtyNum) || qtyNum < 0) fieldErrors.quantityAvailable = "Quantity must be 0 or more.";
 
-  const locationR = validateLocation(input?.location);
-  if (!locationR.ok) Object.assign(fieldErrors, locationR.fieldErrors);
+  const regionR = validateRegionId(input?.regionId, { forListing: true });
+  if (!regionR.ok) Object.assign(fieldErrors, regionR.fieldErrors);
+
+  const villageR = validateListingVillage(input?.village);
+  if (!villageR.ok) Object.assign(fieldErrors, villageR.fieldErrors);
 
   const imagesRaw = input?.images;
   const images =
@@ -456,7 +430,8 @@ export function validateListingInput(input) {
     price: Math.round(priceNum * 100) / 100,
     unit,
     quantityAvailable: Math.round(qtyNum * 100) / 100,
-    location: locationR.value,
+    regionId: regionR.value,
+    village: villageR.value,
     images: cleanedImages.length ? cleanedImages : ["/img/logo.png"],
   });
 }

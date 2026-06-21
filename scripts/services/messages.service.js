@@ -156,15 +156,14 @@ export async function listConversations(userId) {
 
   const conversations = [...byKey.values()];
 
-  // Resolve display names/locations for the other participants.
+  // Resolve display names for the other participants.
   const otherIds = [...new Set(conversations.map((c) => c.otherUserId))];
   if (otherIds.length) {
     const supabase = getSupabase();
-    const { data: users } = await supabase.from("users").select("id,name,location").in("id", otherIds);
+    const { data: users } = await supabase.from("users").select("id,name").in("id", otherIds);
     const map = Object.fromEntries((users ?? []).map((u) => [u.id, u]));
     for (const c of conversations) {
       c.otherUserName = map[c.otherUserId]?.name ?? t("common.unknownUser");
-      c.otherUserLocation = map[c.otherUserId]?.location ?? "";
     }
   }
 

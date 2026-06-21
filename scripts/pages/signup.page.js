@@ -1,8 +1,9 @@
 import { boot } from "../app/boot.js";
 import { signup, signupWithGoogle } from "../app/auth-state.js";
+import { STORAGE_KEYS } from "../app/config.js";
 import { toast, qs, setText } from "../app/ui.js";
 import { t, onLanguageChange } from "../app/i18n.js";
-import { wirePasswordRuleFeedback, wirePasswordConfirmFeedback } from "../data/validators.js";
+import { wirePasswordRuleFeedback, wirePasswordConfirmFeedback, validateRole, validatePhone } from "../data/validators.js";
 import { mountPasswordToggles, renderPasswordToggleButton } from "../components/password-toggle.js";
 import { renderGoogleAuthButton, renderAuthDivider } from "../components/google-auth-button.js";
 
@@ -12,6 +13,9 @@ const root = document.getElementById("signup-root");
 if (!root) throw new Error("Missing #signup-root");
 
 let savedSignupState = null;
+let googleModalHost = null;
+let googleModalWired = false;
+let googleModalState = { role: "", phone: "", open: false };
 
 function optionalFieldLabel(forId, labelKey) {
   return `
@@ -56,6 +60,177 @@ function restoreSignupState(state) {
       if (compWrap) compWrap.classList.toggle("visible", state.role === "business");
     }
   }
+}
+
+function captureGoogleModalState() {
+  if (!googleModalHost) return;
+  const roleInput = googleModalHost.querySelector("#google-role-hidden");
+  const phoneInput = googleModalHost.querySelector("#google-phone");
+  googleModalState = {
+    ...googleModalState,
+    role: roleInput?.value || "",
+    phone: phoneInput?.value || "",
+  };
+}
+
+function restoreGoogleModalState() {
+  if (!googleModalHost) return;
+  const roleInput = googleModalHost.querySelector("#google-role-hidden");
+  const phoneInput = googleModalHost.querySelector("#google-phone");
+  if (phoneInput && googleModalState.phone) phoneInput.value = googleModalState.phone;
+  if (roleInput && googleModalState.role) {
+    roleInput.value = googleModalState.role;
+    googleModalHost.querySelectorAll(".role-card[data-role]").forEach((card) => {
+      card.classList.toggle("selected", card.dataset.role === googleModalState.role);
+    });
+  }
+}
+
+function closeGoogleSignupModal() {
+  captureGoogleModalState();
+  googleModalState.open = false;
+  googleModalHost?.classList.remove("open");
+  document.body.style.overflow = "";
+}
+
+function setGoogleModalLoading(on) {
+  const continueBtn = googleModalHost?.querySelector("#google-signup-continue-btn");
+  if (!continueBtn) return;
+  continueBtn.disabled = on;
+  const label = continueBtn.querySelector("span");
+  if (label) {
+    label.textContent = on ? t("auth.google.loading") : t("auth.google.continue");
+  }
+}
+
+function wireGoogleSignupModal() {
+  if (googleModalWired) return;
+  googleModalWired = true;
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && googleModalState.open) closeGoogleSignupModal();
+  });
+}
+
+function renderGoogleSignupModal() {
+  wireGoogleSignupModal();
+
+  if (!googleModalHost) {
+    googleModalHost = document.createElement("div");
+    googleModalHost.id = "google-signup-modal";
+    googleModalHost.className = "google-signup-backdrop";
+    document.body.appendChild(googleModalHost);
+
+    googleModalHost.addEventListener("click", (e) => {
+      if (e.target === googleModalHost) closeGoogleSignupModal();
+    });
+  }
+
+  googleModalHost.innerHTML = `
+    <div class="google-signup-modal" role="dialog" aria-modal="true" aria-labelledby="google-signup-title">
+      <button type="button" class="google-signup-close" id="google-signup-close" aria-label="${t("guestGate.close")}">×</button>
+      <h2 class="auth-heading" id="google-signup-title">${t("auth.google.signupModal.title")}</h2>
+      <p class="auth-subheading">${t("auth.google.signupModal.subtitle")}</p>
+
+      <span class="role-section-label">${t("auth.signup.iAmA")}</span>
+      <div class="role-grid role-grid--modal" id="google-role-grid">
+        <button type="button" class="role-card" data-role="farmer">
+          <span class="role-card-check" aria-hidden="true">&#10003;</span>
+          <span class="role-card-icon">&#127807;</span>
+          <span class="role-card-title">${t("auth.signup.farmer")}</span>
+          <span class="role-card-desc">${t("auth.signup.farmerDesc")}</span>
+        </button>
+        <button type="button" class="role-card" data-role="business">
+          <span class="role-card-check" aria-hidden="true">&#10003;</span>
+          <span class="role-card-icon">&#127978;</span>
+          <span class="role-card-title">${t("auth.signup.business")}</span>
+          <span class="role-card-desc">${t("auth.signup.businessDesc")}</span>
+        </button>
+        <button type="button" class="role-card" data-role="consumer">
+          <span class="role-card-check" aria-hidden="true">&#10003;</span>
+          <span class="role-card-icon">&#128722;</span>
+          <span class="role-card-title">${t("auth.signup.consumer")}</span>
+          <span class="role-card-desc">${t("auth.signup.consumerDesc")}</span>
+        </button>
+      </div>
+      <input type="hidden" id="google-role-hidden" value="" />
+
+      <div class="form-field">
+        <label class="form-label" for="google-phone">${t("auth.signup.phone")}</label>
+        <input class="input" id="google-phone" name="phone" type="tel" autocomplete="tel"
+               inputmode="tel" placeholder="${t("auth.signup.phonePlaceholder")}" />
+      </div>
+
+      <div class="google-signup-actions">
+        ${renderGoogleAuthButton({ id: "google-signup-continue-btn", label: t("auth.google.continue") })}
+        <button type="button" class="btn btn-ghost btn-full" id="google-signup-cancel-btn">${t("common.cancel")}</button>
+      </div>
+    </div>
+  `;
+
+  const roleInput = googleModalHost.querySelector("#google-role-hidden");
+  const phoneInput = googleModalHost.querySelector("#google-phone");
+  const continueBtn = googleModalHost.querySelector("#google-signup-continue-btn");
+  const cancelBtn = googleModalHost.querySelector("#google-signup-cancel-btn");
+  const closeBtn = googleModalHost.querySelector("#google-signup-close");
+
+  googleModalHost.querySelectorAll(".role-card[data-role]").forEach((card) => {
+    card.addEventListener("click", () => {
+      googleModalHost.querySelectorAll(".role-card[data-role]").forEach((c) => c.classList.remove("selected"));
+      card.classList.add("selected");
+      roleInput.value = card.dataset.role;
+      googleModalState.role = card.dataset.role;
+    });
+  });
+
+  closeBtn?.addEventListener("click", closeGoogleSignupModal);
+  cancelBtn?.addEventListener("click", closeGoogleSignupModal);
+
+  continueBtn?.addEventListener("click", async () => {
+    const role = roleInput?.value || "";
+    const phone = phoneInput?.value || "";
+
+    const roleR = validateRole(role);
+    if (!roleR.ok) {
+      toast("error", Object.values(roleR.fieldErrors)[0] ?? t("service.roleInvalid"));
+      return;
+    }
+
+    const phoneR = validatePhone(phone);
+    if (!phoneR.ok) {
+      toast("error", Object.values(phoneR.fieldErrors)[0] ?? t("validation.phoneRequired"));
+      return;
+    }
+
+    try {
+      sessionStorage.setItem(
+        STORAGE_KEYS.googleSignup,
+        JSON.stringify({ role: roleR.value, phone: phoneR.value }),
+      );
+    } catch {
+      toast("error", t("auth.google.failed"));
+      return;
+    }
+
+    googleModalState = { role: roleR.value, phone: phoneR.value, open: true };
+    setGoogleModalLoading(true);
+    const res = await signupWithGoogle();
+    if (!res.ok) {
+      setGoogleModalLoading(false);
+      toast("error", res.error.message ?? t("auth.google.failed"));
+    }
+  });
+
+  restoreGoogleModalState();
+  if (googleModalState.open) googleModalHost.classList.add("open");
+}
+
+function openGoogleSignupModal() {
+  renderGoogleSignupModal();
+  googleModalState.open = true;
+  googleModalHost.classList.add("open");
+  document.body.style.overflow = "hidden";
+  googleModalHost.querySelector("#google-phone")?.focus();
 }
 
 function mountSignup() {
@@ -134,14 +309,6 @@ function mountSignup() {
                    placeholder="${t("auth.signup.companyNamePlaceholder")}" />
             <span class="form-error" data-err="companyName"></span>
           </div>
-        </div>
-
-        <!-- ── Location ── -->
-        <div class="form-field">
-          <label class="form-label" for="sf-location">${t("auth.signup.location")}</label>
-          <input class="input" id="sf-location" name="location"
-                 autocomplete="address-level2" placeholder="${t("auth.signup.locationPlaceholder")}" required />
-          <span class="form-error" data-err="location"></span>
         </div>
 
         <!-- ── Phone ── -->
@@ -240,29 +407,15 @@ function mountSignup() {
     });
   });
 
-  function setGoogleLoading(on) {
-    if (!googleBtn) return;
-    googleBtn.disabled = on;
-    googleBtn.querySelector("span").textContent = on
-      ? t("auth.google.loading")
-      : t("auth.google.signup");
-  }
-
   const next = new URLSearchParams(location.search).get("next");
   if (next) loginLink.href = `/pages/login.html?next=${encodeURIComponent(next)}`;
 
-  googleBtn?.addEventListener("click", async () => {
-    clearErrors();
-    setGoogleLoading(true);
-    const res = await signupWithGoogle();
-    if (!res.ok) {
-      setGoogleLoading(false);
-      toast("error", res.error.message ?? t("auth.google.failed"));
-    }
+  googleBtn?.addEventListener("click", () => {
+    openGoogleSignupModal();
   });
 
 // ─── Error helpers ────────────────────────────────────────────────
-  const FIELD_KEYS = ["name", "farmName", "companyName", "location", "phone", "email", "password", "confirmPassword", "role", "form"];
+  const FIELD_KEYS = ["name", "farmName", "companyName", "phone", "email", "password", "confirmPassword", "role", "form"];
 
   function clearErrors() {
   setText(banner, "");
@@ -288,7 +441,6 @@ function mountSignup() {
       name: fd.get("name"),
       farmName: fd.get("farmName"),
       companyName: fd.get("companyName"),
-      location: fd.get("location"),
       phone: fd.get("phone"),
       email: fd.get("email"),
       password: fd.get("password"),
@@ -317,5 +469,7 @@ function mountSignup() {
 mountSignup();
 onLanguageChange(() => {
   savedSignupState = captureSignupState();
+  captureGoogleModalState();
   mountSignup();
+  renderGoogleSignupModal();
 });

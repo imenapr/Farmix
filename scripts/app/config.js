@@ -6,6 +6,7 @@ export const APP = {
 /** UI-only localStorage keys (never authoritative for business data). */
 export const STORAGE_KEYS = {
   authCache: "farmix.auth.cache",
+  googleSignup: "farmix.google.signup",
 };
 
 export const ROLES = /** @type {const} */ ({

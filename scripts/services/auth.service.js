@@ -2,7 +2,7 @@ import { STORAGE_KEYS } from "../app/config.js";
 import { emit } from "../app/events.js";
 import { getSupabase } from "../lib/supabase.js";
 import { userFromDb } from "../lib/transform.js";
-import { validateLogin, validateSignup, validateForgotPassword, validateResetPassword, validateCompleteProfile } from "../data/validators.js";
+import { validateLogin, validateSignup, validateForgotPassword, validateResetPassword, validateRole, validatePhone } from "../data/validators.js";
 import { authEmailFromPhone } from "../lib/auth-email.js";
 import { createNotification } from "./notifications.service.js";
 import { findEmailByPhone } from "./users.service.js";
@@ -109,14 +109,35 @@ async function insertUserProfile(row) {
   return { ok: false, duplicate: false };
 }
 
-function googleOAuthRedirectTo(relativePath = "/index.html") {
+function googleOAuthRedirectTo() {
   if (typeof window !== "undefined" && window.location?.origin) {
-    const path = String(relativePath || "/index.html").startsWith("/")
-      ? relativePath
-      : `/${relativePath}`;
-    return `${window.location.origin}${path}`;
+    return window.location.origin;
   }
   return undefined;
+}
+
+function readGoogleSignupDraft() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEYS.googleSignup);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      role: String(parsed.role ?? "").trim(),
+      phone: String(parsed.phone ?? "").trim(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearGoogleSignupDraft() {
+  try {
+    sessionStorage.removeItem(STORAGE_KEYS.googleSignup);
+  } catch {
+    /* ignore */
+  }
 }
 
 function isGoogleAuthUser(authUser) {
@@ -126,24 +147,13 @@ function isGoogleAuthUser(authUser) {
   );
 }
 
-function authUserNeedsProfileCompletion(authUser, profile) {
-  if (!authUser) return false;
-  if (needsRoleSelection(authUser)) return true;
-  if (!isGoogleAuthUser(authUser)) return false;
-  return !String(profile?.phone ?? "").trim();
-}
-
-async function redirectToCompleteProfileIfNeeded(authUser, profile = null) {
-  if (typeof window === "undefined" || !authUser) return;
-  if (window.location.pathname.includes("complete-profile.html")) return;
-
-  const supabase = getSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
-  const user = session?.user ?? authUser;
-  const resolvedProfile = profile ?? (await fetchUserProfile(user.id));
-
-  if (!authUserNeedsProfileCompletion(user, resolvedProfile)) return;
-  window.location.replace("/pages/complete-profile.html");
+function redirectAfterGoogleSignup(role) {
+  if (typeof window === "undefined") return;
+  if (role === ROLES.farmer) {
+    window.location.replace("/pages/farmer-dashboard.html");
+    return;
+  }
+  window.location.replace("/");
 }
 
 function oauthParamsFromUrl() {
@@ -195,10 +205,6 @@ function cleanOAuthUrl() {
   }
 }
 
-function needsRoleSelection(authUser) {
-  return authUser?.user_metadata?.pending_role_selection === true;
-}
-
 function displayNameFromAuthUser(authUser) {
   const meta = authUser.user_metadata ?? {};
   return (
@@ -218,12 +224,61 @@ async function ensureProfileForAuthUser(authUser) {
   const existing = await fetchUserProfile(authUser.id);
   if (existing) return { profile: existing, created: false };
 
+  const draft = readGoogleSignupDraft();
+  if (!draft?.role || !draft?.phone) {
+    emit("toast", {
+      type: "error",
+      message: t("auth.google.signupFirst", {
+        default: "Finish Google sign-up from the registration page first.",
+      }),
+    });
+    await getSupabase().auth.signOut();
+    if (typeof window !== "undefined") {
+      window.location.replace("/pages/signup.html");
+    }
+    return { profile: null, created: false, error: true };
+  }
+
+  const roleR = validateRole(draft.role);
+  const phoneR = validatePhone(draft.phone);
+  if (!roleR.ok || !phoneR.ok) {
+    emit("toast", {
+      type: "error",
+      message: t("service.fixHighlighted", { default: "Fix the highlighted fields." }),
+    });
+    await getSupabase().auth.signOut();
+    clearGoogleSignupDraft();
+    if (typeof window !== "undefined") {
+      window.location.replace("/pages/signup.html");
+    }
+    return { profile: null, created: false, error: true };
+  }
+
+  const supabase = getSupabase();
+  const { data: existingPhone } = await supabase
+    .from("users")
+    .select("id")
+    .eq("phone", phoneR.value)
+    .maybeSingle();
+  if (existingPhone) {
+    emit("toast", {
+      type: "error",
+      message: t("service.phoneExists", { default: "An account with this phone number already exists." }),
+    });
+    await supabase.auth.signOut();
+    if (typeof window !== "undefined") {
+      window.location.replace("/pages/signup.html");
+    }
+    return { profile: null, created: false, error: true };
+  }
+
   const now = new Date().toISOString();
   const profileRow = {
     id: authUser.id,
     email: authUser.email ?? "",
     name: displayNameFromAuthUser(authUser),
-    role: ROLES.consumer,
+    role: roleR.value,
+    phone: phoneR.value,
     location: "",
     avatar_url: avatarUrlFromAuthUser(authUser),
     created_at: now,
@@ -243,18 +298,31 @@ async function ensureProfileForAuthUser(authUser) {
 
   if (inserted.duplicate) {
     const profile = await fetchUserProfile(authUser.id);
+    clearGoogleSignupDraft();
     return { profile, created: false };
   }
 
-  const supabase = getSupabase();
-  const { error: metaError } = await supabase.auth.updateUser({
-    data: { pending_role_selection: true },
-  });
-  if (!metaError) {
-    await supabase.auth.refreshSession();
+  clearGoogleSignupDraft();
+
+  if (roleR.value === ROLES.farmer) {
+    const { data: admins } = await supabase.from("users").select("id").eq("role", ROLES.admin);
+    for (const admin of admins ?? []) {
+      createNotification({
+        userId: admin.id,
+        type: "system",
+        title: t("service.newFarmer", { default: "New farmer registered" }),
+        message: `New farmer registered: ${profileRow.name} (${profileRow.email ?? phoneR.value})`,
+        metadata: {
+          farmerId: authUser.id,
+          farmerName: profileRow.name,
+          farmerEmail: profileRow.email ?? null,
+          farmerPhone: phoneR.value,
+        },
+      });
+    }
   }
 
-  return { profile: userFromDb(profileRow), created: true };
+  return { profile: userFromDb(profileRow), created: true, role: roleR.value };
 }
 
 async function resolveAuthenticatedUser(session) {
@@ -264,7 +332,7 @@ async function resolveAuthenticatedUser(session) {
     return null;
   }
 
-  if (authUser.app_metadata?.provider === "google" || authUser.identities?.some((i) => i.provider === "google")) {
+  if (isGoogleAuthUser(authUser)) {
     const result = await ensureProfileForAuthUser(authUser);
     if (result.error) {
       setCurrentUserInternal(null);
@@ -284,8 +352,8 @@ async function resolveAuthenticatedUser(session) {
           default: `Welcome, ${result.profile.name}!`,
         }),
       });
+      redirectAfterGoogleSignup(result.role ?? result.profile.role);
     }
-    await redirectToCompleteProfileIfNeeded(authUser, result.profile);
     return result.profile;
   }
 
@@ -301,8 +369,8 @@ async function resolveAuthenticatedUser(session) {
   return profile;
 }
 
-async function signInWithGoogleOAuth(redirectPath = "/index.html") {
-  const redirectTo = googleOAuthRedirectTo(redirectPath);
+async function signInWithGoogleOAuth() {
+  const redirectTo = googleOAuthRedirectTo();
   if (!redirectTo) {
     return err(
       "AUTH_ERROR",
@@ -334,107 +402,11 @@ async function signInWithGoogleOAuth(redirectPath = "/index.html") {
 }
 
 export async function loginWithGoogle() {
-  return signInWithGoogleOAuth("/index.html");
+  return signInWithGoogleOAuth();
 }
 
 export async function signupWithGoogle() {
-  return signInWithGoogleOAuth("/pages/complete-profile.html");
-}
-
-export async function completeOAuthRole(input) {
-  const v = validateCompleteProfile(input);
-  if (!v.ok) {
-    return err(
-      "VALIDATION_FAILED",
-      t("service.fixHighlighted", { default: "Fix the highlighted fields." }),
-      v.fieldErrors,
-    );
-  }
-
-  const { role, phone, farmName, companyName } = v.value;
-  const supabase = getSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user?.id) {
-    return err("AUTH_REQUIRED", t("auth.completeProfile.signInRequired", { default: "Sign in to continue." }));
-  }
-
-  const existingProfile = await fetchUserProfile(session.user.id);
-  if (!authUserNeedsProfileCompletion(session.user, existingProfile)) {
-    if (existingProfile) {
-      setCurrentUserInternal(existingProfile);
-      return ok({ user: existingProfile, alreadyComplete: true });
-    }
-  }
-
-  const { data: existingPhone } = await supabase
-    .from("users")
-    .select("id")
-    .eq("phone", phone)
-    .neq("id", session.user.id)
-    .maybeSingle();
-  if (existingPhone) {
-    return err(
-      "CONFLICT",
-      t("service.phoneExists", { default: "An account with this phone number already exists." }),
-      { phone: t("service.phoneExists", { default: "An account with this phone number already exists." }) },
-    );
-  }
-
-  const now = new Date().toISOString();
-  const { data, error } = await supabase
-    .from("users")
-    .update({
-      role,
-      phone,
-      farm_name: farmName || null,
-      company_name: companyName || null,
-      updated_at: now,
-    })
-    .eq("id", session.user.id)
-    .select()
-    .single();
-
-  if (error || !data) {
-    return err(
-      "DB_ERROR",
-      t("auth.completeProfile.failed", { default: "Could not save your profile. Try again." }),
-    );
-  }
-
-  await supabase.auth.updateUser({
-    data: { pending_role_selection: false, role },
-  });
-  await supabase.auth.refreshSession();
-
-  const profile = userFromDb(data);
-  setCurrentUserInternal(profile);
-
-  if (role === ROLES.farmer) {
-    const { data: admins } = await supabase.from("users").select("id").eq("role", ROLES.admin);
-    for (const admin of admins ?? []) {
-      createNotification({
-        userId: admin.id,
-        type: "system",
-        title: t("service.newFarmer", { default: "New farmer registered" }),
-        message: `New farmer registered: ${profile.name} (${profile.email ?? ""})`,
-        metadata: {
-          farmerId: session.user.id,
-          farmerName: profile.name,
-          farmerEmail: profile.email ?? null,
-        },
-      });
-    }
-  }
-
-  return ok({ user: profile });
-}
-
-export async function userNeedsRoleSelection() {
-  const supabase = getSupabase();
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) return false;
-  const profile = await fetchUserProfile(session.user.id);
-  return authUserNeedsProfileCompletion(session.user, profile);
+  return signInWithGoogleOAuth();
 }
 
 let authSessionReady = false;
@@ -482,7 +454,7 @@ export async function signup(input) {
   const v = validateSignup(input);
   if (!v.ok) return err("VALIDATION_FAILED", t("service.fixHighlighted", { default: "Fix the highlighted fields." }), v.fieldErrors);
 
-  const { email, password, role, name, location, phone, farmName, companyName } = v.value;
+  const { email, password, role, name, phone, farmName, companyName } = v.value;
   if (![ROLES.farmer, ROLES.business, ROLES.consumer].includes(role)) {
     return err("VALIDATION_FAILED", t("service.roleInvalid", { default: "Select a valid role." }));
   }
@@ -498,7 +470,7 @@ export async function signup(input) {
   const { data: signData, error: signError } = await supabase.auth.signUp({
     email: authEmail,
     password,
-    options: { data: { name, role, location, phone } },
+    options: { data: { name, role, phone } },
   });
 
   if (signError) {
@@ -533,7 +505,7 @@ export async function signup(input) {
     email: authEmail,
     role,
     name,
-    location,
+    location: "",
     phone: phone || null,
     farm_name: farmName || null,
     company_name: companyName || null,
@@ -591,7 +563,7 @@ export async function login(input) {
       email: data.user.email,
       role: meta.role ?? ROLES.consumer,
       name: meta.name ?? String(email).split("@")[0],
-      location: meta.location ?? "",
+      location: "",
       created_at: now,
       updated_at: now,
     };

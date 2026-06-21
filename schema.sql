@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   role text NOT NULL DEFAULT 'consumer' CHECK (role IN ('farmer', 'business', 'consumer', 'admin')),
   farm_name text,
   company_name text,
-  location text NOT NULL,
+  location text NOT NULL DEFAULT '',
   bio text,
   avatar_url text,
   verified boolean NOT NULL DEFAULT false,
@@ -41,7 +41,10 @@ CREATE TABLE IF NOT EXISTS public.listings (
   price numeric(12, 2) NOT NULL,
   quantity_available integer NOT NULL DEFAULT 1,
   unit text NOT NULL DEFAULT 'other',
-  location text NOT NULL DEFAULT '',
+  region_id text NOT NULL DEFAULT 'other',
+  village text,
+  -- latitude numeric,  -- reserved for future geolocation ("Near Me")
+  -- longitude numeric,
   images jsonb NOT NULL DEFAULT '[]'::jsonb,
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived', 'sold')),
   view_count integer NOT NULL DEFAULT 0,
@@ -135,6 +138,7 @@ CREATE TABLE IF NOT EXISTS public.listing_reviews (
 -- ============================================================================
 
 CREATE INDEX idx_listings_category_id ON public.listings(category_id);
+CREATE INDEX idx_listings_region_id ON public.listings(region_id);
 CREATE INDEX idx_listings_seller_id ON public.listings(seller_id);
 CREATE INDEX idx_listings_status ON public.listings(status);
 CREATE INDEX idx_orders_buyer_id ON public.orders(buyer_id);
@@ -484,3 +488,31 @@ GRANT EXECUTE ON FUNCTION public.increment_listing_view(uuid) TO anon, authentic
 -- ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS listing_id uuid REFERENCES public.listings(id) ON DELETE SET NULL;
 -- ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS metadata jsonb;
 -- CREATE INDEX IF NOT EXISTS idx_listings_category_id ON public.listings(category_id);
+
+-- Listing location refactor (region_id + village — replaces free-text location):
+-- ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS region_id text;
+-- ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS village text;
+-- UPDATE public.listings SET region_id = CASE lower(trim(location))
+--   WHEN 'tbilisi' THEN 'tbilisi' WHEN 'თბილისი' THEN 'tbilisi'
+--   WHEN 'adjara' THEN 'adjara' WHEN 'აჭარა' THEN 'adjara' WHEN 'batumi' THEN 'adjara' WHEN 'ბათუმი' THEN 'adjara'
+--   WHEN 'guria' THEN 'guria' WHEN 'გურია' THEN 'guria'
+--   WHEN 'imereti' THEN 'imereti' WHEN 'იმერეთი' THEN 'imereti' WHEN 'kutaisi' THEN 'imereti' WHEN 'ქუთაისი' THEN 'imereti'
+--   WHEN 'kakheti' THEN 'kakheti' WHEN 'კახეთი' THEN 'kakheti' WHEN 'gurjaani' THEN 'kakheti' WHEN 'გურჯაანი' THEN 'kakheti'
+--   WHEN 'telavi' THEN 'kakheti' WHEN 'თელავი' THEN 'kakheti'
+--   WHEN 'kvemo kartli' THEN 'kvemo-kartli' WHEN 'ქვემო ქართლი' THEN 'kvemo-kartli' WHEN 'rustavi' THEN 'kvemo-kartli'
+--   WHEN 'shida kartli' THEN 'shida-kartli' WHEN 'შიდა ქართლი' THEN 'shida-kartli' WHEN 'gori' THEN 'shida-kartli'
+--   WHEN 'mtskheta-mtianeti' THEN 'mtskheta-mtianeti' WHEN 'მცხეთა-მთიანეთი' THEN 'mtskheta-mtianeti' WHEN 'mtskheta' THEN 'mtskheta-mtianeti'
+--   WHEN 'samegrelo-zemo svaneti' THEN 'samegrelo-zemo-svaneti' WHEN 'zugdidi' THEN 'samegrelo-zemo-svaneti'
+--   WHEN 'samtskhe-javakheti' THEN 'samtskhe-javakheti' WHEN 'akhaltsikhe' THEN 'samtskhe-javakheti'
+--   WHEN 'racha-lechkhumi and kvemo svaneti' THEN 'racha-lechkhumi-kvemo-svaneti'
+--   ELSE NULL END
+-- WHERE region_id IS NULL AND location IS NOT NULL AND trim(location) <> '';
+-- UPDATE public.listings SET region_id = 'other', village = trim(location)
+-- WHERE region_id IS NULL OR trim(region_id) = '';
+-- ALTER TABLE public.listings ALTER COLUMN region_id SET DEFAULT 'other';
+-- ALTER TABLE public.listings ALTER COLUMN region_id SET NOT NULL;
+-- CREATE INDEX IF NOT EXISTS idx_listings_region_id ON public.listings(region_id);
+-- ALTER TABLE public.listings DROP COLUMN IF EXISTS location;
+-- Reserved for future geolocation:
+-- ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS latitude numeric;
+-- ALTER TABLE public.listings ADD COLUMN IF NOT EXISTS longitude numeric;

@@ -1,9 +1,10 @@
 import { boot } from "../app/boot.js";
-import { qs, toast, productListingUrl } from "../app/ui.js";
+import { qs, toast, productListingUrl, escapeHtml } from "../app/ui.js";
 import { initAppState, getCurrentUser } from "../app/auth-state.js";
 import { getListingById, updateListing } from "../services/listings.service.js";
 import { getCategories } from "../data/categories.js";
-import { t, onLanguageChange, getCategoryLabel } from "../app/i18n.js";
+import { renderRegionOptionsHtml, REGIONS } from "../data/locations.js";
+import { t, onLanguageChange, getCategoryLabel, getCurrentLang } from "../app/i18n.js";
 
 boot();
 
@@ -118,9 +119,25 @@ function mountForm() {
           </div>
 
           <div class="form-field">
-            <label class="form-label" for="location">${t("common.location")}</label>
-            <input class="input" id="location" name="location" value="${listing.location || ""}" />
-            <span class="form-error" data-err="location"></span>
+            <label class="form-label" for="regionId">${t("location.region")}</label>
+            <select class="input" id="regionId" name="regionId" required>
+              <option value="">${t("listingForm.selectRegion")}</option>
+              ${renderRegionOptionsHtml({
+                selectedId: listing.regionId,
+                lang: getCurrentLang(),
+                regions: listing.regionId === "other" ? REGIONS : undefined,
+              })}
+            </select>
+            <span class="form-error" data-err="regionId"></span>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label form-label-row" for="village">
+              <span>${t("location.village")}</span>
+              <span class="form-label-optional">(${t("common.optional")})</span>
+            </label>
+            <input class="input" id="village" name="village" value="${escapeHtml(listing.village || "")}" placeholder="${t("listingForm.villagePlaceholder")}" />
+            <span class="form-error" data-err="village"></span>
           </div>
 
           <div class="form-field">
@@ -163,7 +180,7 @@ function mountForm() {
 function wireForm(form) {
   const submitBtn = qs(root, "[data-submit]");
   const formError = qs(root, "#form-error");
-  const fieldKeys = ["title", "categoryId", "price", "unit", "quantityAvailable", "location", "description", "images", "imageUrls"];
+  const fieldKeys = ["title", "categoryId", "price", "unit", "quantityAvailable", "regionId", "village", "description", "images", "imageUrls"];
 
   function clearErrors() {
     formError.style.display = "none";
@@ -230,7 +247,8 @@ function wireForm(form) {
           price: fd.get("price"),
           unit: fd.get("unit"),
           quantityAvailable: fd.get("quantityAvailable"),
-          location: fd.get("location"),
+          regionId: fd.get("regionId"),
+          village: fd.get("village"),
           description: fd.get("description"),
           images,
         },

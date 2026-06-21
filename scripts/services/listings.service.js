@@ -32,12 +32,11 @@ async function attachSellerNames(listings) {
   if (!listings.length) return listings;
   const supabase = getSupabase();
   const sellerIds = [...new Set(listings.map((l) => l.sellerId))];
-  const { data: sellers } = await supabase.from("users").select("id,name,location").in("id", sellerIds);
+  const { data: sellers } = await supabase.from("users").select("id,name").in("id", sellerIds);
   const map = Object.fromEntries((sellers ?? []).map((s) => [s.id, s]));
   return listings.map((l) => ({
     ...l,
     sellerName: map[l.sellerId]?.name,
-    sellerLocation: map[l.sellerId]?.location,
   }));
 }
 
@@ -91,7 +90,7 @@ export async function incrementListingView(listingId) {
 }
 
 const LISTING_CARD_COLUMNS =
-  "id,seller_id,title,category_id,price,unit,quantity_available,location,images,status,view_count,created_at,updated_at";
+  "id,seller_id,title,category_id,price,unit,quantity_available,region_id,village,images,status,view_count,created_at,updated_at";
 
 const SELLER_LISTING_COLUMNS = LISTING_CARD_COLUMNS;
 
@@ -145,7 +144,7 @@ export async function searchListings(filters = new URLSearchParams()) {
     query = query.or(`title.ilike.${searchPattern},description.ilike.${searchPattern}`);
   }
   if (f.cat) query = query.eq("category_id", f.cat);
-  if (f.loc) query = query.ilike("location", `%${f.loc}%`);
+  if (f.region) query = query.eq("region_id", f.region);
   if (f.min != null) query = query.gte("price", Number(f.min));
   if (f.max != null) query = query.lte("price", Number(f.max));
   if (f.inStockOnly) query = query.gt("quantity_available", 0);

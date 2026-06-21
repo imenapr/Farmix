@@ -18,8 +18,9 @@ import { reportListing } from "../services/reports.service.js";
 import { getUserById } from "../services/users.service.js";
 import { placeOrder } from "../services/orders.service.js";
 import { openGuestGate } from "../components/guest-gate.js";
-import { t, onLanguageChange, translatePageHead, getCategoryLabel } from "../app/i18n.js";
+import { t, onLanguageChange, translatePageHead, getCategoryLabel, getCurrentLang } from "../app/i18n.js";
 import { getCategoryById } from "../data/categories.js";
+import { formatListingLocation } from "../data/locations.js";
 
 boot();
 translatePageHead("product.pageTitle");
@@ -473,7 +474,7 @@ function renderPage() {
 
           <div class="listing-meta" style="margin-top:0.6rem;">
             <span class="pill">${escapeHtml(getCategoryLabel(listing.categoryId, getCategoryById(listing.categoryId)?.name))}</span>
-            <span class="pill">${escapeHtml(listing.location || "")}</span>
+            <span class="pill">${escapeHtml(formatListingLocation(listing.regionId, listing.village, getCurrentLang()))}</span>
             <span class="pill">${escapeHtml(String(listing.quantityAvailable))} ${t("product.available")}</span>
             <span class="pill" style="color: #666;">${listing.status === "active" ? t("product.status.available") : listing.status === "sold" ? t("product.status.sold") : t("product.status.archived")}</span>
           </div>
@@ -543,7 +544,6 @@ function renderPage() {
         <section class="card pad seller-box">
           <div class="pill">${t("product.seller")}</div>
           <div style="font-weight:850; letter-spacing:-0.01em;">${escapeHtml(listing.sellerName || t("product.unknownSeller"))}</div>
-          <div class="muted" style="font-size:var(--text-sm);">${escapeHtml(listing.sellerLocation || listing.location || "")}</div>
           ${
             !isOwner
               ? phoneRevealed

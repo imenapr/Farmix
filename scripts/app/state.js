@@ -11,8 +11,6 @@ import {
   logout as authLogout,
   loginWithGoogle as authLoginWithGoogle,
   signupWithGoogle as authSignupWithGoogle,
-  completeOAuthRole as authCompleteOAuthRole,
-  userNeedsRoleSelection as authUserNeedsRoleSelection,
   requestPasswordReset as authRequestPasswordReset,
   sendPasswordResetEmail as authSendPasswordResetEmail,
   completePasswordReset as authCompletePasswordReset,
@@ -46,14 +44,6 @@ export async function loginWithGoogle() {
 
 export async function signupWithGoogle() {
   return authSignupWithGoogle();
-}
-
-export async function completeOAuthRole(role) {
-  return authCompleteOAuthRole(role);
-}
-
-export async function userNeedsRoleSelection() {
-  return authUserNeedsRoleSelection();
 }
 
 export async function logout() {

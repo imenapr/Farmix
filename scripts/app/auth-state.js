@@ -7,8 +7,6 @@ export {
   signup,
   loginWithGoogle,
   signupWithGoogle,
-  completeOAuthRole,
-  userNeedsRoleSelection,
   logout,
   requestPasswordReset,
   sendPasswordResetEmail,

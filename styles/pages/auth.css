@@ -469,3 +469,75 @@
     min-height: 48px;
   }
 }
+
+/* ─── Google signup pre-onboarding modal ─────────────────────────── */
+.google-signup-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(9, 12, 22, 0.46);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 500;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.google-signup-backdrop.open {
+  display: flex;
+}
+
+.google-signup-modal {
+  position: relative;
+  width: min(92vw, 520px);
+  max-height: min(92vh, 720px);
+  overflow-y: auto;
+  background: var(--glass-bg-nav);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  backdrop-filter: var(--glass-blur-heavy);
+  -webkit-backdrop-filter: var(--glass-blur-heavy);
+  box-shadow: var(--glass-shadow-hover);
+  padding: 2rem 1.75rem 1.5rem;
+}
+
+.google-signup-modal .auth-heading {
+  font-size: var(--text-2xl);
+  margin-bottom: 0.35rem;
+}
+
+.google-signup-modal .auth-subheading {
+  margin-bottom: 1.25rem;
+}
+
+.google-signup-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.8rem;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--glass-bg-card);
+  color: var(--color-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
+}
+
+.google-signup-close:hover {
+  color: var(--color-text);
+  border-color: var(--glass-border);
+}
+
+.role-grid--modal {
+  margin-bottom: 1rem;
+}
+
+.google-signup-actions {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1.1rem;
+}

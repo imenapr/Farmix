@@ -1,6 +1,7 @@
 import { escapeHtml, productListingUrl } from "../app/ui.js";
 import { getCategoryById } from "../data/categories.js";
-import { t, getCategoryLabel } from "../app/i18n.js";
+import { formatListingLocation } from "../data/locations.js";
+import { t, getCategoryLabel, getCurrentLang } from "../app/i18n.js";
 import { CURRENCIES, formatPrice } from "../lib/currency.js";
 
 // Curated photography for seeded products — matched by title keyword at render time
@@ -63,7 +64,9 @@ export function renderListingCard(
 
   const listingId = String(listing.id ?? "").trim();
   const href = listingId ? productListingUrl(listingId) : "";
-  const locationText = maskLocation ? t("listing.loginToSeeLocation") : String(listing.location ?? "");
+  const locationText = maskLocation
+    ? t("listing.loginToSeeLocation")
+    : formatListingLocation(listing.regionId, listing.village, getCurrentLang());
 
   return `
     <article class="listing-card glass-card"
