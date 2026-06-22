@@ -1,14 +1,15 @@
 import { boot } from "../app/boot.js";
 import { guardAuth } from "../app/router-guards.js";
-import { toast, qs, setText, escapeHtml, renderStateBlock, mountListingCardLinks } from "../app/ui.js";
+import { toast, qs, setText, escapeHtml, renderStateBlock, mountListingCardLinks, productListingUrl } from "../app/ui.js";
 import { logout as doLogout } from "../app/auth-state.js";
 import { formatAuthIdentifier } from "../lib/auth-email.js";
 import { updateProfile } from "../services/users.service.js";
 import { uploadUserAvatar } from "../services/avatar.service.js";
 import { listFavoritesForUser, removeFavorite } from "../services/favorites.service.js";
+import { listOrdersForBuyer } from "../services/orders.service.js";
 import { renderUserAvatar, wireUserAvatarFallbacks } from "../components/user-avatar.js";
 import { renderListingCard } from "../components/listing-card.js";
-import { getDisplayCurrency } from "../lib/currency.js";
+import { getDisplayCurrency, formatPrice } from "../lib/currency.js";
 import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
 
 boot();
@@ -20,6 +21,29 @@ let accountRecord = null;
 let savedFormState = null;
 let favoriteListings = null;
 let favoritesLoading = false;
+let buyerOrders = null;
+let ordersLoading = false;
+
+function isBuyerRole(role) {
+  return role === "consumer" || role === "business";
+}
+
+function formatOrderDate(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+
+function orderStatusLabel(status) {
+  return t(`orders.status.${status}`, { default: status });
+}
+
+function sellerLabel(order) {
+  if (order.sellerFarmName) return order.sellerFarmName;
+  if (order.sellerName) return order.sellerName;
+  if (order.sellerEmail) return order.sellerEmail;
+  return t("account.orderSeller");
+}
 
 function captureFormState(form) {
   if (!form) return null;
@@ -40,6 +64,99 @@ function ensureProfileSection() {
     root.innerHTML = `<div data-profile-section></div>`;
   }
   return root.querySelector("[data-profile-section]");
+}
+
+function renderOrdersSection() {
+  const existing = root?.querySelector("[data-orders-section]");
+  if (existing) existing.remove();
+  if (!root || !accountUser || !isBuyerRole(accountRecord?.role)) return;
+
+  const section = document.createElement("section");
+  section.className = "card pad account-orders";
+  section.dataset.ordersSection = "true";
+
+  if (ordersLoading) {
+    section.innerHTML = `
+      <header class="account-orders-head">
+        <h2 class="account-orders-title">${escapeHtml(t("account.ordersTitle"))}</h2>
+        <p class="muted account-orders-subtitle">${escapeHtml(t("account.ordersSubtitle"))}</p>
+      </header>
+      <div class="skeleton" style="height: 120px; border-radius: 12px;"></div>
+    `;
+    root.appendChild(section);
+    return;
+  }
+
+  const orders = buyerOrders ?? [];
+  const currency = getDisplayCurrency();
+
+  section.innerHTML = `
+    <header class="account-orders-head">
+      <h2 class="account-orders-title">${escapeHtml(t("account.ordersTitle"))}</h2>
+      <p class="muted account-orders-subtitle">${escapeHtml(t("account.ordersSubtitle"))}</p>
+    </header>
+    ${
+      orders.length
+        ? `
+      <div class="account-orders-table-wrap">
+        <table class="account-orders-table">
+          <thead>
+            <tr>
+              <th scope="col">${escapeHtml(t("common.listing"))}</th>
+              <th scope="col">${escapeHtml(t("account.orderSeller"))}</th>
+              <th scope="col">${escapeHtml(t("common.quantity"))}</th>
+              <th scope="col">${escapeHtml(t("common.total"))}</th>
+              <th scope="col">${escapeHtml(t("common.status"))}</th>
+              <th scope="col">${escapeHtml(t("account.orderPlaced"))}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orders
+              .map(
+                (order) => `
+              <tr>
+                <td>
+                  <a class="account-orders-link" href="${escapeHtml(productListingUrl(order.listingId))}">
+                    ${escapeHtml(order.listingTitle ?? t("common.listing"))}
+                  </a>
+                </td>
+                <td>${escapeHtml(sellerLabel(order))}</td>
+                <td>${Number(order.quantity ?? 0)} ${escapeHtml(order.unit ?? "")}</td>
+                <td>${escapeHtml(formatPrice(order.totalPrice, currency))}</td>
+                <td>
+                  <span class="account-order-status account-order-status--${escapeHtml(order.status)}">
+                    ${escapeHtml(orderStatusLabel(order.status))}
+                  </span>
+                </td>
+                <td>${escapeHtml(formatOrderDate(order.createdAt))}</td>
+              </tr>
+            `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `
+        : renderStateBlock({
+            title: t("account.ordersEmpty"),
+            actionsHtml: `<a class="btn btn-primary" href="/pages/marketplace.html">${escapeHtml(t("favorites.browse"))}</a>`,
+          })
+    }
+  `;
+
+  root.appendChild(section);
+}
+
+async function loadOrders() {
+  if (!accountUser || !isBuyerRole(accountRecord?.role)) return;
+  ordersLoading = true;
+  renderOrdersSection();
+
+  const res = await listOrdersForBuyer(accountUser.id);
+  ordersLoading = false;
+  buyerOrders = res.ok ? res.data : [];
+  if (!res.ok) toast("error", res.error.message ?? t("account.ordersLoadFailed"));
+  renderOrdersSection();
 }
 
 function renderFavoritesSection() {
@@ -332,6 +449,7 @@ function renderAccountForm() {
     location.href = "/index.html";
   });
 
+  renderOrdersSection();
   renderFavoritesSection();
 }
 
@@ -341,6 +459,7 @@ if (root) {
     accountUser = user;
     accountRecord = user;
     renderAccountForm();
+    loadOrders();
     loadFavorites();
     onLanguageChange(() => {
       translatePageHead("account.pageTitle", "account.pageSubtitle");
