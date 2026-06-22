@@ -131,7 +131,9 @@ catSelect.addEventListener("change", (e) => {
   if (e.target.value === "config") {
     showCategoryModal();
     e.target.value = "";
+    return;
   }
+  applyFiltersFromForm();
 });
 
 addBtn.addEventListener("click", () => {
@@ -319,7 +321,7 @@ function translateFilterLabels() {
   }
 
   const applyBtn = form.querySelector('button[type="submit"]');
-  if (applyBtn) applyBtn.textContent = t("common.apply");
+  if (applyBtn) applyBtn.hidden = true;
   if (resetBtn) resetBtn.textContent = t("common.reset");
 
   const inStockLabel = form.querySelector("[data-in-stock-label]");
@@ -596,8 +598,16 @@ function applyFiltersFromForm() {
 }
 
 const applyFiltersDebounced = debounce(applyFiltersFromForm, 400);
+const minInput = form.elements.namedItem("min");
+const maxInput = form.elements.namedItem("max");
+const sortSelect = form.elements.namedItem("sort");
+
 qInput.addEventListener("input", applyFiltersDebounced);
+if (minInput) minInput.addEventListener("input", applyFiltersDebounced);
+if (maxInput) maxInput.addEventListener("input", applyFiltersDebounced);
 if (inStockInput) inStockInput.addEventListener("change", applyFiltersFromForm);
+if (regionSelect) regionSelect.addEventListener("change", applyFiltersFromForm);
+if (sortSelect) sortSelect.addEventListener("change", applyFiltersFromForm);
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();

@@ -379,7 +379,7 @@ export const translations = {
 
     "marketplace.search": "Search",
     "marketplace.searchPlaceholder": "Tomatoes, honey, milk...",
-    "marketplace.searchHint": "Updates after a short pause.",
+    "marketplace.searchHint": "Filters update automatically.",
     "marketplace.allCategories": "All categories",
     "marketplace.minPrice": "Min price",
     "marketplace.maxPrice": "Max price",
@@ -952,7 +952,7 @@ export const translations = {
 
     "marketplace.search": "ძებნა",
     "marketplace.searchPlaceholder": "პომიდორი, თაფლი, რძე...",
-    "marketplace.searchHint": "განახლდება მცირე პაუზის შემდეგ.",
+    "marketplace.searchHint": "ფილტრები ავტომატურად განახლდება.",
     "marketplace.allCategories": "ყველა კატეგორია",
     "marketplace.minPrice": "მინ. ფასი",
     "marketplace.maxPrice": "მაქს. ფასი",
