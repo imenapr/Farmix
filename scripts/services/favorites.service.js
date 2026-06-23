@@ -43,6 +43,19 @@ async function attachRatings(listings) {
   }));
 }
 
+export async function listFavoritedListingIds(userId) {
+  if (!userId) return ok(new Set());
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("favorites")
+    .select("listing_id")
+    .eq("user_id", userId);
+
+  if (error) return err("DB_ERROR", error.message);
+  return ok(new Set((data ?? []).map((row) => row.listing_id)));
+}
+
 export async function isListingFavorited(listingId, userId) {
   if (!listingId || !userId) return ok(false);
 

@@ -129,6 +129,65 @@
   padding-inline: 0.85rem;
 }
 
+/* ─── Favorite button on listing cards ────────────────────────────── */
+.listing-favorite-btn {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--color-muted);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(10, 15, 25, 0.12);
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease,
+    transform 120ms ease;
+}
+
+.listing-favorite-btn svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+}
+
+.listing-favorite-btn.is-active {
+  color: #e53935;
+  border-color: rgba(229, 57, 53, 0.35);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.listing-favorite-btn.is-active svg {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.listing-favorite-btn:hover:not(:disabled) {
+  color: #e53935;
+  border-color: rgba(229, 57, 53, 0.45);
+  transform: scale(1.05);
+}
+
+.listing-favorite-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.listing-favorite-btn:focus-visible {
+  outline: 2px solid rgba(39, 168, 116, 0.55);
+  outline-offset: 2px;
+}
+
 /* ─── Order button overlay on listing cards ───────────────────────── */
 .listing-order-wrap {
   position: absolute;

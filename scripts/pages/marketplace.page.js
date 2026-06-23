@@ -8,6 +8,7 @@ import { ROLES } from "../app/config.js";
 import { validateMarketplaceFilters } from "../data/validators.js";
 import { renderListingCard } from "../components/listing-card.js";
 import { placeOrder } from "../services/orders.service.js";
+import { listFavoritedListingIds, toggleFavorite } from "../services/favorites.service.js";
 import { openGuestGate } from "../components/guest-gate.js";
 import { t, onLanguageChange, translatePageHead, getCategoryLabel, getCurrentLang } from "../app/i18n.js";
 import {
@@ -167,7 +168,10 @@ mountListingCardLinks(resultsEl);
 
 const listingsById = new Map();
 let orderDelegationMounted = false;
+let favoriteDelegationMounted = false;
 let cachedResults = null;
+let favoritedListingIds = new Set();
+let favoriteBusyIds = new Set();
 let omListingId = null;
 let omPricePerUnit = 0;
 let omMaxQty = 0;
@@ -196,6 +200,65 @@ function mountOrderDelegation() {
 }
 
 mountOrderDelegation();
+
+const FAVORITE_HEART_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+  <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+</svg>`;
+
+function favoriteAriaLabel(isFavorited) {
+  return isFavorited ? t("product.savedListingAria") : t("product.saveListingAria");
+}
+
+function updateFavoriteButton(btn, isFavorited) {
+  btn.classList.toggle("is-active", isFavorited);
+  btn.setAttribute("aria-pressed", isFavorited ? "true" : "false");
+  btn.setAttribute("aria-label", favoriteAriaLabel(isFavorited));
+}
+
+function mountFavoriteDelegation() {
+  if (favoriteDelegationMounted) return;
+  favoriteDelegationMounted = true;
+  resultsEl.addEventListener("click", async (event) => {
+    const btn = event.target.closest("[data-toggle-favorite]");
+    if (!btn) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const card = btn.closest("[data-listing-id]");
+    const listingId = card?.dataset?.listingId;
+    if (!listingId) return;
+
+    const curUser = getCurrentUser();
+    if (!curUser) {
+      openGuestGate();
+      return;
+    }
+
+    if (favoriteBusyIds.has(listingId)) return;
+
+    const currentlyFavorited = favoritedListingIds.has(listingId);
+    favoriteBusyIds.add(listingId);
+    btn.disabled = true;
+
+    const res = await toggleFavorite(curUser.id, listingId, currentlyFavorited);
+
+    favoriteBusyIds.delete(listingId);
+    btn.disabled = false;
+
+    if (!res.ok) {
+      toast("error", res.error.message ?? t("favorites.failed"));
+      return;
+    }
+
+    const nextFavorited = Boolean(res.data.favorited);
+    if (nextFavorited) favoritedListingIds.add(listingId);
+    else favoritedListingIds.delete(listingId);
+    updateFavoriteButton(btn, nextFavorited);
+    toast("success", nextFavorited ? t("favorites.added") : t("favorites.removed"));
+  });
+}
+
+mountFavoriteDelegation();
 
 function updateCurrencyToggleUI() {
   if (!currencyToggle) return;
@@ -247,6 +310,7 @@ function renderResultsBlock({ items, total, page, pageSize, filters }) {
   }
 
   resultsEl.innerHTML = `<div class="grid cols-3">${items.map((l) => renderListingCard(l, { currency: displayCurrency })).join("")}</div>`;
+  injectFavoriteButtons(items);
   injectOrderButtons(items);
   renderPager({
     page,
@@ -439,7 +503,22 @@ async function render() {
   resultsEl.innerHTML = renderSkeletonCards(9);
 
   try {
-    const res = await searchListings(new URLSearchParams(location.search));
+    const curUser = getCurrentUser();
+    const favoritesPromise = curUser
+      ? listFavoritedListingIds(curUser.id)
+      : Promise.resolve({ ok: true, data: new Set() });
+
+    const [res, favoritesRes] = await Promise.all([
+      searchListings(new URLSearchParams(location.search)),
+      favoritesPromise,
+    ]);
+
+    if (favoritesRes.ok) {
+      favoritedListingIds = favoritesRes.data;
+    } else {
+      favoritedListingIds = new Set();
+    }
+
     if (!res.ok) {
       resultsEl.innerHTML = renderStateBlock({
         title: t("marketplace.couldntLoad"),
@@ -553,6 +632,28 @@ document.getElementById("om-confirm").addEventListener("click", async () => {
   }
 });
 
+function injectFavoriteButtons(items) {
+  const curUser = getCurrentUser();
+  if (!curUser) return;
+
+  items.forEach((listing) => {
+    if (String(listing.sellerId) === String(curUser.id)) return;
+
+    const card = resultsEl.querySelector(`[data-listing-id="${CSS.escape(listing.id)}"]`);
+    if (!card || card.querySelector("[data-toggle-favorite]")) return;
+
+    const isFavorited = favoritedListingIds.has(listing.id);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `listing-favorite-btn ${isFavorited ? "is-active" : ""}`;
+    btn.dataset.toggleFavorite = "true";
+    btn.setAttribute("aria-pressed", isFavorited ? "true" : "false");
+    btn.setAttribute("aria-label", favoriteAriaLabel(isFavorited));
+    btn.innerHTML = FAVORITE_HEART_SVG;
+    card.appendChild(btn);
+  });
+}
+
 function injectOrderButtons(items) {
   const curUser = getCurrentUser();
   if (curUser?.role === ROLES.farmer || curUser?.role === ROLES.admin) return;
@@ -632,5 +733,13 @@ onLanguageChange(() => {
   if (filtersToggleLabel) {
     filtersToggleLabel.textContent = isOpen ? t("marketplace.hideFilters") : t("marketplace.showFilters");
   }
-  if (cachedResults) renderResultsBlock(cachedResults);
+  if (cachedResults) {
+    renderResultsBlock(cachedResults);
+    resultsEl.querySelectorAll("[data-toggle-favorite]").forEach((btn) => {
+      const card = btn.closest("[data-listing-id]");
+      const listingId = card?.dataset?.listingId;
+      if (!listingId) return;
+      updateFavoriteButton(btn, favoritedListingIds.has(listingId));
+    });
+  }
 });
