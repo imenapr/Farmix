@@ -1,6 +1,7 @@
 import { boot } from "../app/boot.js";
 import { renderSkeletonCards, renderStateBlock, mountListingCardLinks, escapeHtml } from "../app/ui.js";
 import { renderListingCard } from "../components/listing-card.js";
+import { getDisplayCurrency } from "../lib/currency.js";
 import { getTrendingListings } from "../app/state.js";
 import { getCurrentUser } from "../app/auth-state.js";
 import { ROLES } from "../app/config.js";
@@ -83,9 +84,10 @@ function renderLatest() {
 
   const user = getCurrentUser();
   const isGuest = !user;
+  const currency = getDisplayCurrency();
   mount.innerHTML = `
     <div class="grid cols-3">
-      ${latestItems.map((l) => renderListingCard(l, { compact: true, maskLocation: isGuest })).join("")}
+      ${latestItems.map((l) => renderListingCard(l, { compact: true, maskLocation: isGuest, currency })).join("")}
     </div>
   `;
   mountListingCardLinks(mount);

@@ -24,6 +24,7 @@ import { t, onLanguageChange, translatePageHead, getCategoryLabel, getCurrentLan
 import { getCategoryById } from "../data/categories.js";
 import { formatListingLocation } from "../data/locations.js";
 import { renderAvailabilityBadge } from "../components/listing-card.js";
+import { formatPrice, getDisplayCurrency } from "../lib/currency.js";
 
 boot();
 translatePageHead("product.pageTitle");
@@ -268,7 +269,7 @@ function ensureOrderModal() {
         </div>
       </div>
       <div class="order-modal-total-label">${t("common.total")}</div>
-      <div class="order-modal-total-val" id="om-total">$0.00</div>
+      <div class="order-modal-total-val" id="om-total">${formatPrice(0, getDisplayCurrency())}</div>
       <div class="order-modal-actions">
         <button class="btn btn-ghost" id="om-cancel" type="button">${t("common.cancel")}</button>
         <button class="btn btn-primary" id="om-confirm" type="button">${t("marketplace.confirmOrder")}</button>
@@ -287,8 +288,8 @@ function ensureOrderModal() {
 
   function updateOrderTotal() {
     const qty = Math.max(1, Math.min(omMaxQty, parseInt(orderModalEl.querySelector("#om-qty").value, 10) || 1));
-    const total = (qty * omPricePerUnit).toFixed(2);
-    orderModalEl.querySelector("#om-total").textContent = `$${total}`;
+    const currency = getDisplayCurrency();
+    orderModalEl.querySelector("#om-total").textContent = formatPrice(qty * omPricePerUnit, currency);
   }
 
   orderModalEl.querySelector("#om-qty").addEventListener("input", updateOrderTotal);
@@ -339,14 +340,14 @@ function ensureOrderModal() {
     omPricePerUnit = targetListing.price;
     omMaxQty = targetListing.quantityAvailable;
     omUnit = targetListing.unit;
+    const currency = getDisplayCurrency();
     orderModalEl.querySelector("#om-title").textContent = targetListing.title;
-    orderModalEl.querySelector("#om-meta").textContent = `$${Number(targetListing.price).toFixed(2)} / ${targetListing.unit}`;
+    orderModalEl.querySelector("#om-meta").textContent = `${formatPrice(targetListing.price, currency)} / ${targetListing.unit}`;
     orderModalEl.querySelector("#om-avail").textContent = `${targetListing.quantityAvailable} ${targetListing.unit}`;
     const qtyInput = orderModalEl.querySelector("#om-qty");
     qtyInput.max = targetListing.quantityAvailable;
     qtyInput.value = 1;
-    const total = (1 * omPricePerUnit).toFixed(2);
-    orderModalEl.querySelector("#om-total").textContent = `$${total}`;
+    orderModalEl.querySelector("#om-total").textContent = formatPrice(omPricePerUnit, currency);
     orderModalEl.style.display = "flex";
     orderModalEl.setAttribute("aria-hidden", "false");
     setTimeout(() => qtyInput.focus(), 60);
@@ -478,7 +479,7 @@ function renderPage() {
   const showOrderCta = canShowOrderCta(user, isOwner, isAdmin) && listing.status === "active";
   const orderQty = Number(listing.quantityAvailable ?? 0);
 
-  const price = Number(listing.price).toFixed(2).replace(/\.00$/, "");
+  const price = formatPrice(listing.price, getDisplayCurrency());
   const images = Array.isArray(listing.images) && listing.images.length ? listing.images : ["/img/logo.png"];
 
   const delivery = avg(listing.ratings?.delivery);

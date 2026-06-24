@@ -6,6 +6,7 @@ import { getUserListings } from "../services/listings.service.js";
 import { listInquiriesForSeller } from "../services/messages.service.js";
 import { listOrdersForSeller, updateOrderStatus } from "../services/orders.service.js";
 import { renderListingCard } from "../components/listing-card.js";
+import { formatPrice, getDisplayCurrency } from "../lib/currency.js";
 import { t, onLanguageChange } from "../app/i18n.js";
 
 boot();
@@ -95,6 +96,7 @@ function renderOrderStatusSelect(order) {
 }
 
 function renderOverview() {
+  const currency = getDisplayCurrency();
   const totalViews = listings.reduce((sum, l) => sum + Number(l.views ?? 0), 0);
   const totalInquiries = messages.length;
   const recentListings = listings.slice(0, 5);
@@ -143,7 +145,7 @@ function renderOverview() {
                   <td><a class="fd-row-link" href="${escapeHtml(productListingUrl(l.id))}">${escapeHtml(l.title)}</a></td>
                   <td>${escapeHtml(l.status)}</td>
                   <td>${Number(l.views ?? 0)}</td>
-                  <td>$${Number(l.price ?? 0).toFixed(2)}</td>
+                  <td>${escapeHtml(formatPrice(l.price ?? 0, currency))}</td>
                   <td>${escapeHtml(formatDate(l.updatedAt))}</td>
                 </tr>`,
                 )
@@ -201,7 +203,7 @@ function renderOverview() {
                   <td><a class="fd-row-link" href="${escapeHtml(productListingUrl(o.listingId))}">${escapeHtml(o.listingTitle ?? t("common.listing"))}</a></td>
                   <td>${escapeHtml(buyerLabel(o))}</td>
                   <td>${Number(o.quantity ?? 0)} ${escapeHtml(o.unit ?? "")}</td>
-                  <td>$${Number(o.totalPrice ?? 0).toFixed(2)}</td>
+                  <td>${escapeHtml(formatPrice(o.totalPrice ?? 0, currency))}</td>
                   <td><span class="fd-order-status fd-order-status--${escapeHtml(o.status)}">${escapeHtml(orderStatusLabel(o.status))}</span></td>
                   <td>${escapeHtml(formatDate(o.createdAt))}</td>
                 </tr>`,
@@ -217,6 +219,7 @@ function renderOverview() {
 }
 
 function renderListingsSection() {
+  const currency = getDisplayCurrency();
   return `
     <section class="fd-section" id="fd-section-listings">
       <div class="fd-section-head">
@@ -225,7 +228,7 @@ function renderListingsSection() {
       </div>
       ${
         listings.length
-          ? `<div class="grid cols-3">${listings.map((l) => renderListingCard(l, { compact: true })).join("")}</div>`
+          ? `<div class="grid cols-3">${listings.map((l) => renderListingCard(l, { compact: true, currency })).join("")}</div>`
           : `<div class="fd-empty">${t("farmer.noListingsFound")}</div>`
       }
     </section>
@@ -233,6 +236,7 @@ function renderListingsSection() {
 }
 
 function renderOrdersSection() {
+  const currency = getDisplayCurrency();
   return `
     <section class="fd-section" id="fd-section-orders">
       <div class="fd-section-head">
@@ -255,7 +259,7 @@ function renderOrdersSection() {
                   <td><a class="fd-row-link" href="${escapeHtml(productListingUrl(o.listingId))}">${escapeHtml(o.listingTitle ?? t("common.listing"))}</a></td>
                   <td>${escapeHtml(buyerLabel(o))}</td>
                   <td>${Number(o.quantity ?? 0)} ${escapeHtml(o.unit ?? "")}</td>
-                  <td>$${Number(o.totalPrice ?? 0).toFixed(2)}</td>
+                  <td>${escapeHtml(formatPrice(o.totalPrice ?? 0, currency))}</td>
                   <td>${renderOrderStatusSelect(o)}</td>
                   <td>${escapeHtml(formatDate(o.createdAt))}</td>
                 </tr>`,

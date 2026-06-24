@@ -3,6 +3,7 @@ import { escapeHtml, renderSkeletonCards, renderStateBlock, qs, mountListingCard
 import { getUserById } from "../services/users.service.js";
 import { getUserListings } from "../app/state.js";
 import { renderListingCard } from "../components/listing-card.js";
+import { getDisplayCurrency } from "../lib/currency.js";
 import { renderUserAvatar, wireUserAvatarFallbacks } from "../components/user-avatar.js";
 import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
 
@@ -82,7 +83,7 @@ function renderProfile() {
     return;
   }
 
-  listingsMount.innerHTML = `<div class="grid cols-3">${profileListings.map((x) => renderListingCard(x)).join("")}</div>`;
+  listingsMount.innerHTML = `<div class="grid cols-3">${profileListings.map((x) => renderListingCard(x, { currency: getDisplayCurrency() })).join("")}</div>`;
   mountListingCardLinks(listingsMount);
 }
 

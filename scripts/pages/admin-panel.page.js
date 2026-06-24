@@ -10,6 +10,7 @@ import {
   takeDownListing,
 } from "../services/admin.service.js";
 import { getTheme, toggleTheme } from "../app/theme.js";
+import { formatPrice, getDisplayCurrency } from "../lib/currency.js";
 import { t, onLanguageChange } from "../app/i18n.js";
 
 boot();
@@ -216,7 +217,7 @@ async function renderListings() {
               <td>${escapeHtml(l.title)}</td>
               <td>${escapeHtml(l.sellerName ?? t("admin.dash"))}</td>
               <td>${escapeHtml(l.status)}</td>
-              <td>$${Number(l.price).toFixed(2)}</td>
+              <td>${escapeHtml(formatPrice(l.price, getDisplayCurrency()))}</td>
               <td>
                 ${
                   l.status !== "archived"
