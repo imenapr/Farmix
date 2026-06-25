@@ -44,6 +44,7 @@ function roleLinks(role) {
       return `
         <a href="/pages/marketplace.html">${t("nav.link.marketplace")}</a>
         <a href="/pages/for-businesses.html">${t("nav.link.businessSourcing")}</a>
+        <a href="/pages/account.html">${t("nav.link.account")}</a>
       `;
     case "consumer":
       return `
@@ -83,6 +84,21 @@ function timeAgo(ts) {
   const h = Math.floor(m / 60);
   if (h < 24) return t("common.hoursAgo", { n: h });
   return t("common.daysAgo", { n: Math.floor(h / 24) });
+}
+
+function orderNotificationHref(role, metadata = {}) {
+  const orderId = metadata?.orderId;
+  const qp = new URLSearchParams();
+  if (orderId) qp.set("orderId", orderId);
+
+  if (role === "farmer" || role === "admin") {
+    qp.set("section", "orders");
+    const qs = qp.toString();
+    return `/pages/farmer-dashboard.html${qs ? `?${qs}` : ""}`;
+  }
+
+  const qs = qp.toString();
+  return `/pages/account.html${qs ? `?${qs}` : ""}`;
 }
 
 function themeToggleIcon(theme) {
@@ -377,7 +393,7 @@ export function mountNavbar(targetEl) {
               if (listingId) qp.set("listing", listingId);
               location.href = `/pages/messages.html${qp.toString() ? `?${qp}` : ""}`;
             } else if (isOrder) {
-              location.href = "/pages/farmer-dashboard.html";
+              location.href = orderNotificationHref(_role, found?.metadata);
             }
           };
           item.addEventListener("click", markRead);

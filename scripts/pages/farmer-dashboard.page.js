@@ -31,7 +31,11 @@ let user = null;
 let listings = [];
 let messages = [];
 let orders = [];
-let activeSection = "overview";
+const urlParams = new URLSearchParams(location.search);
+const highlightOrderId = urlParams.get("orderId");
+const VALID_SECTIONS = new Set(["overview", "listings", "orders", "messages", "profile"]);
+const requestedSection = urlParams.get("section");
+let activeSection = requestedSection && VALID_SECTIONS.has(requestedSection) ? requestedSection : "overview";
 
 function translateStaticLabels() {
   const sidebarTitle = document.querySelector(".fd-sidebar-title");
@@ -49,6 +53,14 @@ function translateStaticLabels() {
   });
 }
 
+function highlightOrderRow() {
+  if (!highlightOrderId) return;
+  const row = document.querySelector(`[data-order-id="${CSS.escape(highlightOrderId)}"]`);
+  if (!row) return;
+  row.classList.add("order-row-highlight");
+  row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
 function showSection(id) {
   activeSection = id;
   document.querySelectorAll(".fd-section").forEach((s) => s.classList.remove("active"));
@@ -58,6 +70,7 @@ function showSection(id) {
   const meta = getSections()[id] ?? getSections().overview;
   if (pageTitle) pageTitle.textContent = meta.title;
   if (pageSub) pageSub.textContent = meta.sub;
+  if (id === "orders") highlightOrderRow();
 }
 
 function formatDate(iso) {
@@ -199,7 +212,7 @@ function renderOverview() {
               ${recentOrders
                 .map(
                   (o) => `
-                <tr>
+                <tr data-order-id="${escapeHtml(o.id)}">
                   <td><a class="fd-row-link" href="${escapeHtml(productListingUrl(o.listingId))}">${escapeHtml(o.listingTitle ?? t("common.listing"))}</a></td>
                   <td>${escapeHtml(buyerLabel(o))}</td>
                   <td>${Number(o.quantity ?? 0)} ${escapeHtml(o.unit ?? "")}</td>
@@ -255,7 +268,7 @@ function renderOrdersSection() {
               ${orders
                 .map(
                   (o) => `
-                <tr>
+                <tr data-order-id="${escapeHtml(o.id)}">
                   <td><a class="fd-row-link" href="${escapeHtml(productListingUrl(o.listingId))}">${escapeHtml(o.listingTitle ?? t("common.listing"))}</a></td>
                   <td>${escapeHtml(buyerLabel(o))}</td>
                   <td>${Number(o.quantity ?? 0)} ${escapeHtml(o.unit ?? "")}</td>

@@ -23,6 +23,7 @@ let favoriteListings = null;
 let favoritesLoading = false;
 let buyerOrders = null;
 let ordersLoading = false;
+const highlightOrderId = new URLSearchParams(location.search).get("orderId");
 
 function isBuyerRole(role) {
   return role === "consumer" || role === "business";
@@ -64,6 +65,14 @@ function ensureProfileSection() {
     root.innerHTML = `<div data-profile-section></div>`;
   }
   return root.querySelector("[data-profile-section]");
+}
+
+function highlightOrderRow(section) {
+  if (!highlightOrderId || !section) return;
+  const row = section.querySelector(`[data-order-id="${CSS.escape(highlightOrderId)}"]`);
+  if (!row) return;
+  row.classList.add("order-row-highlight");
+  row.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function renderOrdersSection() {
@@ -114,7 +123,7 @@ function renderOrdersSection() {
             ${orders
               .map(
                 (order) => `
-              <tr>
+              <tr data-order-id="${escapeHtml(order.id)}">
                 <td>
                   <a class="account-orders-link" href="${escapeHtml(productListingUrl(order.listingId))}">
                     ${escapeHtml(order.listingTitle ?? t("common.listing"))}
@@ -145,6 +154,7 @@ function renderOrdersSection() {
   `;
 
   root.appendChild(section);
+  highlightOrderRow(section);
 }
 
 async function loadOrders() {
