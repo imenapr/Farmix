@@ -156,83 +156,81 @@ export async function updateOrderStatus(orderId, status) {
   return ok(updated);
 }
 
+function mapPlaceOrderRpcError(error) {
+  const raw = String(error?.message ?? error?.details ?? "");
+  const code = raw.match(/\b(AUTH_REQUIRED|FORBIDDEN|NOT_FOUND|CONFLICT|VALIDATION_FAILED)\b/)?.[1];
+  const stockMatch = raw.match(/INSUFFICIENT_STOCK:(\d+)/);
+
+  if (code === "AUTH_REQUIRED") return err("AUTH_REQUIRED", t("common.loginRequired"));
+  if (code === "FORBIDDEN") return err("FORBIDDEN", t("service.notAllowed", { default: "Not allowed." }));
+  if (code === "NOT_FOUND") return err("NOT_FOUND", t("orders.listingNotFound", { default: "Listing not found." }));
+  if (code === "CONFLICT") {
+    return err("CONFLICT", t("orders.listingUnavailable", { default: "This listing is no longer available." }));
+  }
+  if (code === "VALIDATION_FAILED") {
+    return err("VALIDATION_FAILED", t("orders.invalidQuantity", { default: "Invalid quantity." }));
+  }
+  if (stockMatch) {
+    const available = Number(stockMatch[1]);
+    return err(
+      "VALIDATION_FAILED",
+      t("orders.insufficientStock", {
+        default: `Only ${available} available.`,
+        count: available,
+      }),
+    );
+  }
+  return err("DB_ERROR", raw || t("common.unknown"));
+}
+
 export async function placeOrder(buyerId, listingId, quantity) {
   const user = getCurrentUser();
-  if (!user) return err("AUTH_REQUIRED", "Login required.");
+  if (!user) return err("AUTH_REQUIRED", t("common.loginRequired"));
   if (String(buyerId ?? "") !== String(user.id)) {
-    return err("FORBIDDEN", "You can only place orders for your own account.");
+    return err("FORBIDDEN", t("orders.buyerOnly", { default: "You can only place orders for your own account." }));
   }
   if (user.role === ROLES.farmer || user.role === ROLES.admin) {
-    return err("FORBIDDEN", "Only buyers can place orders.");
+    return err("FORBIDDEN", t("orders.buyersOnly", { default: "Only buyers can place orders." }));
   }
 
   const qty = Math.max(1, Math.floor(Number(quantity)));
-  if (!Number.isFinite(qty)) return err("VALIDATION_FAILED", "Invalid quantity.");
-
-  const listingRes = await getListingById(listingId);
-  if (!listingRes.ok) return err("NOT_FOUND", "Listing not found.");
-
-  const listing = listingRes.data;
-  if (listing.status !== "active") return err("CONFLICT", "This listing is no longer available.");
-  if (listing.sellerId === user.id) return err("FORBIDDEN", "You cannot order your own listing.");
-  if (qty > listing.quantityAvailable) {
-    return err("VALIDATION_FAILED", `Only ${listing.quantityAvailable} available.`);
+  if (!Number.isFinite(qty)) {
+    return err("VALIDATION_FAILED", t("orders.invalidQuantity", { default: "Invalid quantity." }));
   }
 
-  const totalPrice = Math.round(qty * listing.price * 100) / 100;
   const supabase = getSupabase();
-  const now = new Date().toISOString();
+  const { data, error } = await supabase.rpc("place_order_atomic", {
+    p_listing_id: listingId,
+    p_quantity: qty,
+  });
 
-  const { data, error } = await supabase
-    .from("orders")
-    .insert({
-      listing_id: listingId,
-      buyer_id: user.id,
-      seller_id: listing.sellerId,
-      quantity: qty,
-      price_per_unit: listing.price,
-      total_price: totalPrice,
-      status: "pending",
-      created_at: now,
-      updated_at: now,
-    })
-    .select()
-    .single();
+  if (error) return mapPlaceOrderRpcError(error);
+  if (!data?.order) return err("DB_ERROR", t("common.unknown"));
 
-  if (error) return err("DB_ERROR", error.message);
-
-  const newQty = listing.quantityAvailable - qty;
-  const listingUpdate = {
-    quantity_available: newQty,
-    updated_at: now,
-    ...(newQty <= 0 ? { status: "sold" } : {}),
-  };
-
-  await supabase.from("listings").update(listingUpdate).eq("id", listingId);
   invalidateCache("listings:");
 
-  const order = keysToCamel(data);
-  order.title = listing.title;
-  order.unit = listing.unit;
+  const order = keysToCamel(data.order);
+  order.title = data.listing_title;
+  order.unit = data.listing_unit;
 
   const buyerName = user.name || user.email?.split("@")[0] || t("service.orderAnonymousBuyer", { default: "A buyer" });
   await createNotification({
-    userId: listing.sellerId,
+    userId: data.seller_id,
     type: "order",
     title: t("service.newOrder", { default: "New order" }),
     message: t("service.newOrderMessage", {
-      default: `${buyerName} placed an order for ${qty} ${listing.unit} of "${listing.title}".`,
+      default: `${buyerName} placed an order for ${qty} ${order.unit} of "${order.title}".`,
       name: buyerName,
       qty,
-      unit: listing.unit,
-      title: listing.title,
+      unit: order.unit,
+      title: order.title,
     }),
     metadata: {
       orderId: order.id,
       listingId,
       buyerId: user.id,
       quantity: qty,
-      totalPrice,
+      totalPrice: order.totalPrice,
     },
   });
 
