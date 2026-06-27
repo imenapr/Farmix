@@ -1,7 +1,6 @@
 import { getSupabase } from "../lib/supabase.js";
 import { ROLES } from "../app/config.js";
 import { t } from "../app/i18n.js";
-import { getListingById } from "./listings.service.js";
 import { getCurrentUser } from "./auth.service.js";
 import { createNotification } from "./notifications.service.js";
 import { keysToCamel } from "../lib/transform.js";
@@ -108,6 +107,19 @@ export async function listOrdersForBuyer(buyerId) {
   return ok(enrichBuyerOrders(orders, sellers, listings));
 }
 
+function mapUpdateOrderStatusRpcError(error) {
+  const raw = String(error?.message ?? error?.details ?? "");
+  const code = raw.match(/\b(AUTH_REQUIRED|FORBIDDEN|NOT_FOUND|VALIDATION_FAILED)\b/)?.[1];
+
+  if (code === "AUTH_REQUIRED") return err("AUTH_REQUIRED", t("common.loginRequired"));
+  if (code === "FORBIDDEN") return err("FORBIDDEN", t("service.notAllowed", { default: "Not allowed." }));
+  if (code === "NOT_FOUND") return err("NOT_FOUND", t("orders.notFound", { default: "Order not found." }));
+  if (code === "VALIDATION_FAILED") {
+    return err("VALIDATION_FAILED", t("orders.invalidStatus", { default: "Invalid order status." }));
+  }
+  return err("DB_ERROR", raw || t("common.unknown"));
+}
+
 export async function updateOrderStatus(orderId, status) {
   const user = getCurrentUser();
   if (!user) return err("AUTH_REQUIRED", t("common.loginRequired"));
@@ -116,27 +128,25 @@ export async function updateOrderStatus(orderId, status) {
   }
 
   const supabase = getSupabase();
-  const { data: row, error: fetchError } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
-  if (fetchError || !row) return err("NOT_FOUND", t("orders.notFound", { default: "Order not found." }));
+  const { data, error } = await supabase.rpc("update_order_status_atomic", {
+    p_order_id: orderId,
+    p_status: status,
+  });
 
-  const order = keysToCamel(row);
-  if (String(order.sellerId) !== String(user.id) && user.role !== ROLES.admin) {
-    return err("FORBIDDEN", t("service.notAllowed", { default: "Not allowed." }));
+  if (error) return mapUpdateOrderStatusRpcError(error);
+  if (!data?.order) return err("DB_ERROR", t("common.unknown"));
+
+  if (data.inventory_restored) {
+    invalidateCache("listings:");
   }
-  if (order.status === status) return ok(order);
 
-  const now = new Date().toISOString();
-  const { data, error } = await supabase
-    .from("orders")
-    .update({ status, updated_at: now })
-    .eq("id", orderId)
-    .select()
-    .single();
+  const order = keysToCamel(data.order);
+  const listingTitle = data.listing_title || t("common.listing");
 
-  if (error) return err("DB_ERROR", error.message);
+  if (!data.status_changed) {
+    return ok({ ...order, listingTitle });
+  }
 
-  const listingRes = await getListingById(order.listingId);
-  const listingTitle = listingRes.ok ? listingRes.data.title : t("common.listing");
   const statusLabel = t(`orders.status.${status}`, { default: status });
 
   await createNotification({
@@ -151,8 +161,7 @@ export async function updateOrderStatus(orderId, status) {
     metadata: { orderId, listingId: order.listingId, status },
   });
 
-  const updated = keysToCamel(data);
-  updated.listingTitle = listingTitle;
+  const updated = { ...order, listingTitle };
   return ok(updated);
 }
 
