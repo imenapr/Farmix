@@ -13,6 +13,16 @@ export function toast(type, message) {
   emit("toast", { type, message });
 }
 
+/** Toast order success, then navigate to the buyer account page with order highlight. */
+export function confirmBuyerOrderPlacement(orderId, message, delayMs = 1400) {
+  toast("success", message);
+  window.setTimeout(() => {
+    const url = new URL("/pages/account.html", location.origin);
+    if (orderId) url.searchParams.set("orderId", String(orderId));
+    location.href = `${url.pathname}${url.search}`;
+  }, delayMs);
+}
+
 export function qs(root, selector) {
   const el = root.querySelector(selector);
   if (!el) throw new Error(`Missing element: ${selector}`);

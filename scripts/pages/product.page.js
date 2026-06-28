@@ -11,6 +11,7 @@ import {
   setText,
   readListingIdFromUrl,
   productListingUrl,
+  confirmBuyerOrderPlacement,
 } from "../app/ui.js";
 import { incrementListingView, archiveListingAsOwnerOrAdmin } from "../services/listings.service.js";
 import { getUserReviewForListing, submitListingReview } from "../services/reviews.service.js";
@@ -323,15 +324,10 @@ function ensureOrderModal() {
     }
 
     closeOrderModal();
-    toast("success", t("marketplace.orderPlaced", { qty, unit: omUnit, title: result.data.title }));
-
-    if (listing && listing.id === omListingId) {
-      const newQty = omMaxQty - qty;
-      listing.quantityAvailable = newQty;
-      if (newQty <= 0) listing.status = "sold";
-      omMaxQty = newQty;
-      renderPage();
-    }
+    confirmBuyerOrderPlacement(
+      result.data.id,
+      t("marketplace.orderPlaced", { qty, unit: omUnit, title: result.data.title }),
+    );
   });
 
   orderModalEl._open = (targetListing, triggerEl = null) => {

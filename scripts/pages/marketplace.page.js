@@ -1,5 +1,5 @@
 import { boot } from "../app/boot.js";
-import { debounce, renderSkeletonCards, renderStateBlock, toast, qs, mountListingCardLinks } from "../app/ui.js";
+import { debounce, renderSkeletonCards, renderStateBlock, toast, qs, mountListingCardLinks, confirmBuyerOrderPlacement } from "../app/ui.js";
 import { getCurrentUser } from "../app/auth-state.js";
 import { searchListings } from "../app/state.js";
 import { getCategories } from "../data/categories.js";
@@ -605,31 +605,10 @@ document.getElementById("om-confirm").addEventListener("click", async () => {
   }
 
   closeOrderModal();
-  toast("success", t("marketplace.orderPlaced", { qty, unit: omUnit, title: result.data.title }));
-
-  const card = resultsEl.querySelector(`[data-listing-id="${CSS.escape(omListingId)}"]`);
-  if (card) {
-    const newQty = omMaxQty - qty;
-    card.setAttribute("data-qty", newQty);
-    const availEl = card.querySelector(".listing-avail");
-    if (availEl) {
-      if (newQty > 0) {
-        availEl.classList.remove("listing-avail--unavailable");
-        availEl.textContent = t("listing.availableShort", { n: newQty });
-      } else {
-        availEl.classList.add("listing-avail--unavailable");
-        availEl.textContent = t("listing.notAvailable");
-      }
-    }
-    const orderBtn = card.querySelector(".btn-order");
-    if (orderBtn && newQty <= 0) {
-      orderBtn.disabled = true;
-      orderBtn.textContent = t("marketplace.outOfStock");
-    }
-    if (newQty <= 0 && qty > 0) {
-      toast("error", t("marketplace.inventoryLow"));
-    }
-  }
+  confirmBuyerOrderPlacement(
+    result.data.id,
+    t("marketplace.orderPlaced", { qty, unit: omUnit, title: result.data.title }),
+  );
 });
 
 function injectFavoriteButtons(items) {
