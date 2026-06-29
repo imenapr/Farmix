@@ -3,6 +3,7 @@ import { guardAuth } from "../app/router-guards.js";
 import { toast, qs, setText, escapeHtml, renderStateBlock, mountListingCardLinks, productListingUrl } from "../app/ui.js";
 import { logout as doLogout } from "../app/auth-state.js";
 import { formatAuthIdentifier } from "../lib/auth-email.js";
+import { formatPrice, getDisplayCurrency } from "../lib/currency.js";
 import { updateProfile } from "../services/users.service.js";
 import { uploadUserAvatar } from "../services/avatar.service.js";
 import { listFavoritesForUser, removeFavorite } from "../services/favorites.service.js";
@@ -18,6 +19,7 @@ translatePageHead("account.pageTitle", "account.pageSubtitle");
 const root = document.getElementById("account-root");
 let accountUser = null;
 let accountRecord = null;
+let buyerOrders = [];
 let savedFormState = null;
 let favoriteListings = null;
 let favoritesLoading = false;
@@ -44,6 +46,10 @@ function sellerLabel(order) {
   if (order.sellerName) return order.sellerName;
   if (order.sellerEmail) return order.sellerEmail;
   return t("account.orderSeller");
+}
+
+function isBuyerRole(role) {
+  return role === "consumer" || role === "business";
 }
 
 function captureFormState(form) {
@@ -351,6 +357,7 @@ function renderAccountForm() {
         </div>
       </form>
     </section>
+    ${renderBuyerOrdersSection()}
   `;
 
   const form = qs(profileRoot, "#profile-form");
@@ -463,11 +470,21 @@ function renderAccountForm() {
   renderFavoritesSection();
 }
 
+async function loadBuyerOrders(userId) {
+  const res = await listOrdersForBuyer(userId);
+  buyerOrders = res.ok ? res.data : [];
+}
+
 if (root) {
   guardAuth().then(async (user) => {
     if (!user) return;
     accountUser = user;
     accountRecord = user;
+
+    if (isBuyerRole(user.role)) {
+      await loadBuyerOrders(user.id);
+    }
+
     renderAccountForm();
     loadOrders();
     loadFavorites();
