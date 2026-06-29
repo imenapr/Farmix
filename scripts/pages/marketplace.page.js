@@ -1,5 +1,5 @@
 import { boot } from "../app/boot.js";
-import { debounce, renderSkeletonCards, renderStateBlock, toast, qs, mountListingCardLinks, confirmBuyerOrderPlacement } from "../app/ui.js";
+import { debounce, renderSkeletonCards, renderStateBlock, toast, qs, mountListingCardLinks, confirmBuyerOrderPlacement, escapeHtml } from "../app/ui.js";
 import { getCurrentUser } from "../app/auth-state.js";
 import { searchListings } from "../app/state.js";
 import { getCategories } from "../data/categories.js";
@@ -35,6 +35,7 @@ const resultsEl = qs(root, "[data-results]");
 const countEl = qs(root, "[data-count]");
 const pageEl = qs(root, "[data-page]");
 const pagerEl = qs(root, "[data-pager]");
+const filterChipsEl = qs(root, "[data-filter-chips]");
 const resetBtn = qs(root, "[data-reset]");
 const qInput = qs(form, "input[name='q']");
 const inStockInput = qs(form, "input[name='inStock']");
@@ -291,6 +292,92 @@ function wireCurrencyToggle() {
 
 wireCurrencyToggle();
 
+function sortFilterLabel(sort) {
+  if (sort === "price_asc") return t("marketplace.sortPriceAsc");
+  if (sort === "price_desc") return t("marketplace.sortPriceDesc");
+  return t("marketplace.sortNewest");
+}
+
+function buildActiveFilterChips(filters) {
+  const chips = [];
+  const currency = displayCurrency;
+
+  if (filters.q) {
+    chips.push({ key: "q", label: `"${filters.q}"` });
+  }
+  if (filters.cat) {
+    const cat = CATEGORIES.find((c) => c.id === filters.cat);
+    chips.push({ key: "cat", label: getCategoryLabel(filters.cat, cat?.name ?? filters.cat) });
+  }
+  if (filters.region) {
+    chips.push({ key: "region", label: getRegionLabel(filters.region, getCurrentLang()) });
+  }
+  if (filters.min !== null && filters.min !== undefined) {
+    chips.push({ key: "min", label: t("marketplace.filterMinPrice", { price: formatPrice(filters.min, currency) }) });
+  }
+  if (filters.max !== null && filters.max !== undefined) {
+    chips.push({ key: "max", label: t("marketplace.filterMaxPrice", { price: formatPrice(filters.max, currency) }) });
+  }
+  if (filters.sort && filters.sort !== "newest") {
+    chips.push({ key: "sort", label: sortFilterLabel(filters.sort) });
+  }
+  if (filters.inStockOnly) {
+    chips.push({ key: "inStockOnly", label: t("marketplace.inStockOnly") });
+  }
+
+  return chips;
+}
+
+function removeActiveFilter(filterKey) {
+  const params = new URLSearchParams(location.search);
+
+  if (filterKey === "q") params.delete("q");
+  else if (filterKey === "cat") params.delete("cat");
+  else if (filterKey === "region") params.delete("region");
+  else if (filterKey === "min") params.delete("min");
+  else if (filterKey === "max") params.delete("max");
+  else if (filterKey === "sort") params.delete("sort");
+  else if (filterKey === "inStockOnly") params.delete("stock");
+
+  params.delete("page");
+  const query = params.toString();
+  history.replaceState(null, "", query ? `${location.pathname}?${query}` : location.pathname);
+  render();
+}
+
+function renderActiveFilterChips(filters) {
+  if (!filterChipsEl) return;
+
+  const chips = buildActiveFilterChips(filters);
+  if (!chips.length) {
+    filterChipsEl.hidden = true;
+    filterChipsEl.innerHTML = "";
+    return;
+  }
+
+  filterChipsEl.hidden = false;
+  filterChipsEl.setAttribute("role", "list");
+  filterChipsEl.setAttribute("aria-label", t("marketplace.activeFilters"));
+  filterChipsEl.innerHTML = chips
+    .map(
+      (chip) => `
+    <span class="market-filter-chip" role="listitem">
+      <span class="market-filter-chip-label">${escapeHtml(chip.label)}</span>
+      <button
+        type="button"
+        class="market-filter-chip-remove"
+        data-remove-filter="${escapeHtml(chip.key)}"
+        aria-label="${escapeHtml(t("marketplace.removeFilter", { filter: chip.label }))}"
+      >×</button>
+    </span>`,
+    )
+    .join("");
+
+  filterChipsEl.querySelectorAll("[data-remove-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => removeActiveFilter(btn.dataset.removeFilter));
+  });
+}
+
 function renderResultsBlock({ items, total, page, pageSize, filters }) {
   cachedResults = { items, total, page, pageSize, filters };
   for (const listing of items) listingsById.set(listing.id, listing);
@@ -496,6 +583,7 @@ async function render() {
 
   const f = parsed.filters;
   syncForm(f);
+  renderActiveFilterChips(f);
 
   countEl.textContent = t("marketplace.loadingListings");
   pageEl.textContent = "";
@@ -712,6 +800,8 @@ onLanguageChange(() => {
   if (filtersToggleLabel) {
     filtersToggleLabel.textContent = isOpen ? t("marketplace.hideFilters") : t("marketplace.showFilters");
   }
+  const parsed = readFiltersFromUrl();
+  if (parsed.ok) renderActiveFilterChips(parsed.filters);
   if (cachedResults) {
     renderResultsBlock(cachedResults);
     resultsEl.querySelectorAll("[data-toggle-favorite]").forEach((btn) => {

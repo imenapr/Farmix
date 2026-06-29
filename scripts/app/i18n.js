@@ -422,6 +422,10 @@ export const translations = {
     "marketplace.showFilters": "Show filters",
     "marketplace.hideFilters": "Hide filters",
     "marketplace.inStockOnly": "In stock only",
+    "marketplace.activeFilters": "Active filters",
+    "marketplace.removeFilter": "Remove {filter}",
+    "marketplace.filterMinPrice": "Min {price}",
+    "marketplace.filterMaxPrice": "Max {price}",
 
     "profile.missingId": "Missing profile ID",
     "profile.missingIdDesc": "Return to the marketplace and open a seller profile.",
@@ -1007,6 +1011,10 @@ export const translations = {
     "marketplace.showFilters": "ფილტრების ჩვენება",
     "marketplace.hideFilters": "ფილტრების დამალვა",
     "marketplace.inStockOnly": "მხოლოდ მარაგში",
+    "marketplace.activeFilters": "აქტიური ფილტრები",
+    "marketplace.removeFilter": "{filter}-ის მოხსნა",
+    "marketplace.filterMinPrice": "მინ. {price}",
+    "marketplace.filterMaxPrice": "მაქს. {price}",
 
     "profile.missingId": "პროფილის ID აკლია",
     "profile.missingIdDesc": "დაბრუნდით მარკეტში და გახსენით გამყიდველის პროფილი.",
