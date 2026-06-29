@@ -19,9 +19,9 @@
   -webkit-backdrop-filter: var(--glass-blur);
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 84px);
+  min-height: calc(100vh - var(--nav-offset));
   position: sticky;
-  top: 84px;
+  top: var(--nav-offset);
 }
 
 .adm-sidebar-head {

@@ -471,7 +471,29 @@ export function mountNavbar(targetEl) {
     render({ user: getCurrentUser() });
   });
 
+  const getDocumentScrollY = () =>
+    Math.max(
+      window.scrollY || 0,
+      document.documentElement.scrollTop || 0,
+      document.body.scrollTop || 0,
+    );
+
+  const syncNavScrollState = () => {
+    targetEl.classList.toggle("nav-at-top", getDocumentScrollY() <= 8);
+  };
+
+  const scrollRoots = [window, document, document.documentElement, document.body];
+
+  targetEl.classList.add("nav-at-top");
+  syncNavScrollState();
+  for (const root of scrollRoots) {
+    root.addEventListener("scroll", syncNavScrollState, { passive: true });
+  }
+
   return () => {
+    for (const root of scrollRoots) {
+      root.removeEventListener("scroll", syncNavScrollState);
+    }
     if (_unsubNotif)  _unsubNotif();
     if (_docClickOff) _docClickOff();
     if (_docKeydownOff) _docKeydownOff();

@@ -64,7 +64,10 @@
 
   /* Layout */
   --layout-width: 90vw;
+  --nav-top-gap: 0.75rem;
   --nav-offset: 4.75rem;
+  --nav-transition: 120ms;
+  --nav-ease: var(--ease-spring);
   --container-max: 1180px;
   --radius-sm: 10px;
   --radius-md: 16px;
