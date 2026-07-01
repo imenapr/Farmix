@@ -10,7 +10,6 @@ import { listFavoritesForUser, removeFavorite } from "../services/favorites.serv
 import { listOrdersForBuyer } from "../services/orders.service.js";
 import { renderUserAvatar, wireUserAvatarFallbacks } from "../components/user-avatar.js";
 import { renderListingCard } from "../components/listing-card.js";
-import { getDisplayCurrency, formatPrice } from "../lib/currency.js";
 import { t, onLanguageChange, translatePageHead } from "../app/i18n.js";
 
 boot();
@@ -19,11 +18,10 @@ translatePageHead("account.pageTitle", "account.pageSubtitle");
 const root = document.getElementById("account-root");
 let accountUser = null;
 let accountRecord = null;
-let buyerOrders = [];
+let buyerOrders = null;
 let savedFormState = null;
 let favoriteListings = null;
 let favoritesLoading = false;
-let buyerOrders = null;
 let ordersLoading = false;
 const highlightOrderId = new URLSearchParams(location.search).get("orderId");
 
@@ -46,10 +44,6 @@ function sellerLabel(order) {
   if (order.sellerName) return order.sellerName;
   if (order.sellerEmail) return order.sellerEmail;
   return t("account.orderSeller");
-}
-
-function isBuyerRole(role) {
-  return role === "consumer" || role === "business";
 }
 
 function captureFormState(form) {
@@ -357,7 +351,6 @@ function renderAccountForm() {
         </div>
       </form>
     </section>
-    ${renderBuyerOrdersSection()}
   `;
 
   const form = qs(profileRoot, "#profile-form");
@@ -470,20 +463,11 @@ function renderAccountForm() {
   renderFavoritesSection();
 }
 
-async function loadBuyerOrders(userId) {
-  const res = await listOrdersForBuyer(userId);
-  buyerOrders = res.ok ? res.data : [];
-}
-
 if (root) {
   guardAuth().then(async (user) => {
     if (!user) return;
     accountUser = user;
     accountRecord = user;
-
-    if (isBuyerRole(user.role)) {
-      await loadBuyerOrders(user.id);
-    }
 
     renderAccountForm();
     loadOrders();
